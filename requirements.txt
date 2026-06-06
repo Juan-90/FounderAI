@@ -1,0 +1,11 @@
+langgraph
+langchain
+langchain-community
+langchain-ollama
+mem0ai
+qdrant-client
+psycopg2-binary
+chainlit
+pydantic
+python-dotenv
+rich

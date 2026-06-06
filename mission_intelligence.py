@@ -1,136 +1,129 @@
 """
 Mission Intelligence — Agente 1
-Descobre o problema real por trás da missão declarada.
+Transforma uma ideia declarada em compreensão clara do problema real.
 """
+
+from pathlib import Path
 
 from backend.core.config import settings
 from backend.core.ollama_client import ollama
-from backend.core.schemas import MissionBrief, MissionInput
+from backend.core.schemas import ClarityLevel, MissionBrief, MissionInput
 
-SYSTEM_PROMPT = """Você é o Mission Intelligence, o primeiro agente do Fundador IA.
+# ─────────────────────────────────────────
+# Carrega o system prompt do arquivo .md
+# ─────────────────────────────────────────
 
-Seu único objetivo é descobrir o PROBLEMA REAL por trás da ideia declarada pelo usuário.
+_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "mission_intelligence.md"
+SYSTEM_PROMPT: str = _PROMPT_PATH.read_text(encoding="utf-8")
 
-Princípios que você NUNCA viola:
-- Buscar a verdade, não agradar o usuário.
-- Nunca assumir que a solução proposta é a melhor.
-- Sempre investigar o problema raiz.
-- Considerar a realidade brasileira quando aplicável.
-- Informar incertezas quando existirem.
+USER_TEMPLATE: str = """Analise a seguinte ideia e produza o Mission Brief completo.
 
-Você responde APENAS no formato especificado. Sem introduções, sem comentários fora do formato.
-"""
+IDEIA DO FUNDADOR:
+{raw_idea}"""
 
-OUTPUT_TEMPLATE = """Analise a seguinte ideia e produza um Mission Brief estruturado.
 
-IDEIA DO USUÁRIO:
-{raw_idea}
-
-Responda EXATAMENTE neste formato:
-
-# Mission Brief
-
-## Missão Declarada
-[Repita a missão como o usuário declarou]
-
-## Problema Identificado
-[Qual problema a solução tenta resolver?]
-
-## Problema Raiz Possível
-[Qual é o problema mais profundo por trás disso? Questione pressupostos.]
-
-## Público-Alvo
-[Quem realmente tem esse problema? Seja específico.]
-
-## Hipóteses Críticas
-[Liste 3-5 hipóteses que, se falsas, tornam a missão inviável]
-- Hipótese 1: ...
-- Hipótese 2: ...
-- Hipótese 3: ...
-
-## Reformulações Recomendadas
-[Sugira 1-3 formas mais precisas de declarar a missão]
-- Opção 1: ...
-
-## Nível de Clareza da Missão
-[Baixo / Médio / Alto — com justificativa]
-
-## Perguntas Pendentes
-[Liste 3-5 perguntas que precisam ser respondidas antes de avançar]
-- Pergunta 1: ...
-"""
-
+# ─────────────────────────────────────────
+# Entry point
+# ─────────────────────────────────────────
 
 async def run_mission_intelligence(input: MissionInput) -> MissionBrief:
     """
     Executa o Mission Intelligence sobre uma ideia do usuário.
     Retorna um MissionBrief estruturado.
     """
-    prompt = OUTPUT_TEMPLATE.format(raw_idea=input.raw_idea)
+    prompt: str = USER_TEMPLATE.format(raw_idea=input.raw_idea)
 
-    raw_output = await ollama.generate(
+    raw_output: str = await ollama.generate(
         model=settings.model_primary,
         prompt=prompt,
         system=SYSTEM_PROMPT,
     )
 
-    brief = _parse_mission_brief(
+    return _parse_mission_brief(
         raw_output=raw_output,
         declared_mission=input.raw_idea,
     )
 
-    return brief
 
+# ─────────────────────────────────────────
+# Parser
+# ─────────────────────────────────────────
 
 def _parse_mission_brief(raw_output: str, declared_mission: str) -> MissionBrief:
     """
     Faz o parse do output do modelo para o schema MissionBrief.
-    TODO: Implementar parser robusto com regex ou modelo estruturado.
+    Usa os marcadores ### como delimitadores de seção.
     """
-    from backend.core.schemas import ClarityLevel
-
-    # Parser simples — será melhorado no Sprint 1
-    lines = raw_output.split("\n")
-
-    def extract_section(title: str) -> str:
-        collecting = False
-        content = []
-        for line in lines:
-            if f"## {title}" in line:
-                collecting = True
-                continue
-            if collecting and line.startswith("## "):
-                break
-            if collecting and line.strip():
-                content.append(line.strip())
-        return "\n".join(content)
-
-    def extract_list(title: str) -> list[str]:
-        section = extract_section(title)
-        items = []
-        for line in section.split("\n"):
-            clean = line.lstrip("- •").strip()
-            if clean:
-                items.append(clean)
-        return items
-
-    # Detecta nível de clareza
-    clarity_text = extract_section("Nível de Clareza da Missão").lower()
-    if "alto" in clarity_text:
-        clarity = ClarityLevel.HIGH
-    elif "médio" in clarity_text or "medio" in clarity_text:
-        clarity = ClarityLevel.MEDIUM
-    else:
-        clarity = ClarityLevel.LOW
+    sections: dict[str, str] = _extract_sections(raw_output)
 
     return MissionBrief(
-        declared_mission=declared_mission,
-        identified_problem=extract_section("Problema Identificado"),
-        root_problem=extract_section("Problema Raiz Possível"),
-        target_audience=extract_section("Público-Alvo"),
-        critical_hypotheses=extract_list("Hipóteses Críticas"),
-        recommended_reformulations=extract_list("Reformulações Recomendadas"),
-        clarity_level=clarity,
-        pending_questions=extract_list("Perguntas Pendentes"),
+        declared_mission=sections.get("Missão Declarada", declared_mission),
+        identified_problem=sections.get("Problema Raiz Identificado", ""),
+        root_problem=sections.get("Problema Raiz Identificado", ""),
+        target_audience=sections.get("Usuário-Alvo Principal", ""),
+        critical_hypotheses=_extract_list(sections.get("Hipóteses Principais", "")),
+        recommended_reformulations=_extract_list(
+            sections.get("Reformulações Sugeridas da Missão", "")
+        ),
+        clarity_level=_parse_confidence(
+            sections.get("Nível de Confiança na Análise", "")
+        ),
+        pending_questions=_extract_list(
+            sections.get("Perguntas Estratégicas para o Fundador", "")
+        ),
         raw_output=raw_output,
     )
+
+
+def _extract_sections(text: str) -> dict[str, str]:
+    """
+    Extrai seções do output usando '### Título' como delimitador.
+    Retorna um dict { título: conteúdo }.
+    """
+    sections: dict[str, str] = {}
+    current_title: str | None = None
+    current_lines: list[str] = []
+
+    for line in text.splitlines():
+        if line.startswith("### "):
+            if current_title is not None:
+                sections[current_title] = "\n".join(current_lines).strip()
+            current_title = line[4:].strip()
+            current_lines = []
+        else:
+            if current_title is not None:
+                current_lines.append(line)
+
+    # Salva a última seção
+    if current_title is not None:
+        sections[current_title] = "\n".join(current_lines).strip()
+
+    return sections
+
+
+def _extract_list(text: str) -> list[str]:
+    """
+    Extrai itens de lista de um bloco de texto.
+    Aceita marcadores: '-', '*', '1.', '2.', etc.
+    """
+    items: list[str] = []
+    for line in text.splitlines():
+        clean: str = line.strip().lstrip("-*•").strip()
+        # Remove numeração tipo "1. ", "2. "
+        if len(clean) > 2 and clean[0].isdigit() and clean[1] in ".)":
+            clean = clean[2:].strip()
+        if clean:
+            items.append(clean)
+    return items
+
+
+def _parse_confidence(text: str) -> ClarityLevel:
+    """
+    Converte o nível de confiança do modelo para o enum ClarityLevel.
+    """
+    lower: str = text.lower()
+    if "alta" in lower or "high" in lower:
+        return ClarityLevel.HIGH
+    elif "média" in lower or "media" in lower or "medium" in lower:
+        return ClarityLevel.MEDIUM
+    return ClarityLevel.LOW

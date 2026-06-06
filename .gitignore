@@ -1,0 +1,30 @@
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos de ambiente
+.env
+.env.local
+
+# Logs
+*.log
+
+# Banco de dados local (se criar)
+*.sqlite3
+
+# Ollama (não commitar modelos grandes)
+ollama/
+
+# Pastas geradas pelo Docker
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
