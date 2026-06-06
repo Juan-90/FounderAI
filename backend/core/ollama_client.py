@@ -27,11 +27,11 @@ class OllamaClient:
             "stream": False,
             "options": {
                 "temperature": 0.3,
-                "num_ctx": 8192,
+                "num_ctx": 4096,
             },
         }
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(
                 f"{self.base_url}/api/generate",
                 json=payload,
