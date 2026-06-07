@@ -2,14 +2,16 @@
 Cliente para comunicação com Ollama (modelos locais).
 """
 
-import httpx
+import json
 from typing import AsyncGenerator
+
+import httpx
 
 from backend.core.config import settings
 
 
 class OllamaClient:
-    def __init__(self):
+    def __init__(self) -> None:
         self.base_url = settings.ollama_base_url
 
     async def generate(
@@ -17,57 +19,49 @@ class OllamaClient:
         model: str,
         prompt: str,
         system: str = "",
-        stream: bool = False,
     ) -> str:
-        """Gera uma resposta do modelo."""
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "system": system,
-            "stream": False,
-            "options": {
-                "temperature": 0.3,
-                "num_ctx": 4096,
-            },
-        }
+        """
+        Gera uma resposta via streaming e acumula o resultado.
+        Usar streaming evita disconnects em respostas longas (ex: Qwen3 14B).
+        """
+        tokens: list[str] = []
+        async for token in self._stream(model=model, prompt=prompt, system=system):
+            tokens.append(token)
+        return "".join(tokens)
 
-        async with httpx.AsyncClient(timeout=600.0) as client:
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["response"]
-
-    async def stream_generate(
+    async def _stream(
         self,
         model: str,
         prompt: str,
         system: str = "",
     ) -> AsyncGenerator[str, None]:
-        """Gera uma resposta em streaming."""
-        payload = {
+        """Stream interno — consome tokens linha a linha."""
+        payload: dict = {
             "model": model,
             "prompt": prompt,
             "system": system,
             "stream": True,
+            "options": {
+                "temperature": 0.3,
+                "num_ctx": 8192,
+            },
         }
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=900.0) as client:
             async with client.stream(
                 "POST",
                 f"{self.base_url}/api/generate",
                 json=payload,
             ) as response:
+                response.raise_for_status()
                 async for line in response.aiter_lines():
-                    if line:
-                        import json
-                        data = json.loads(line)
-                        if token := data.get("response"):
-                            yield token
-                        if data.get("done"):
-                            break
+                    if not line:
+                        continue
+                    data: dict = json.loads(line)
+                    if token := data.get("response"):
+                        yield token
+                    if data.get("done"):
+                        break
 
     async def health_check(self) -> bool:
         """Verifica se o Ollama está disponível."""

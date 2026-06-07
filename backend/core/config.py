@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://ollama:11434"
     model_primary: str = "gemma4:e4b"        # Mission Intelligence, Scorecard
-    model_reasoning: str = "qwen3:14b"        # Reality Engine, Contrarian Engine
+    model_reasoning: str = "gemma4:e4b"      # Reality Engine, Contrarian Engine (Qwen3 14B requer GPU dedicada)
 
     # PostgreSQL
     postgres_host: str = "postgres"
