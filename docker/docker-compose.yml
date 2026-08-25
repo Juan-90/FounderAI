@@ -1,50 +1,43 @@
 services:
+
   ollama:
     image: ollama/ollama:latest
     container_name: founderai-ollama
+    volumes:
+      - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    volumes:
-      - ollama:/root/.ollama
     restart: unless-stopped
 
   postgres:
     image: pgvector/pgvector:pg17
     container_name: founderai-postgres
     environment:
-      POSTGRES_DB: founderai
-      POSTGRES_USER: founderai
-      POSTGRES_PASSWORD: founderai123
-    ports:
-      - "5433:5432"
+      POSTGRES_DB: fundador_ia
+      POSTGRES_USER: fundador
+      POSTGRES_PASSWORD: fundador
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ../database/schemas/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fundador -d fundador_ia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   qdrant:
     image: qdrant/qdrant:latest
     container_name: founderai-qdrant
-    ports:
-      - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
     restart: unless-stopped
 
-  founderai:
-    build: .
-    container_name: founderai-app
-    ports:
-      - "8501:8501"
-    volumes:
-      - .:/app
-    depends_on:
-      - ollama
-      - postgres
-      - qdrant
-    stdin_open: true
-    tty: true
-
 volumes:
-  ollama:
+  ollama_data:
   postgres_data:
   qdrant_data:
