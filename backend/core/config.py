@@ -9,12 +9,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # ── Ollama ──────────────────────────────────────
     ollama_base_url: str = "http://localhost:11434/v1"
-    ollama_timeout: float = 8.0
-    model_primary: str = "gemma4:e4b"
-    model_reasoning: str = "gemma4:e4b"
+    ollama_timeout: float = 30.0
+    model_primary: str = "gemma2:2b"
+    model_reasoning: str = "gemma2:2b"
 
     # Modelo usado pelo Conselho Consultivo (configurável)
-    council_model: str = "gemma4:e4b"
+    council_model: str = "gemma2:2b"
 
     # ── PostgreSQL ───────────────────────────────────
     postgres_host: str = "localhost"

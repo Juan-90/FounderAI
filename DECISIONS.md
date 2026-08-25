@@ -4,6 +4,24 @@
 
 ---
 
+# DECISION LOG - FounderAI 2.0
+
+## 📐 ADR-001: Runtime de Agentes Heterogêneos & Escopo do MVP
+- **Data:** 25/08/2026
+- **Status:** Aprovado
+
+### Contexto
+O FounderAI foi idealizado como um sistema operacional/runtime configurável para agentes de IA heterogêneos (`Model` ≠ `Agent` ≠ `Role` ≠ `Team`). No entanto, dado o prazo (24/12/2026), a limitação de dedicação (~10h/semana) e execução local em CPU/Ollama (Vaio FE15), a implementação precisa de foco estrito.
+
+### Decisão
+1. A arquitetura de código manterá abstrações extensíveis para suportar múltiplos modelos e papéis dinâmicos no futuro.
+2. O MVP (Sprint 1) é implementado com **3 papéis fixos** (`Architect`, `SecurityCoder`, `Generalist`) em execução sequencial local via Ollama (`gemma2:2b`).
+3. O parâmetro de limitação de 3 modelos reflete uma restrição de ambiente/hardware do usuário, não uma limitação da arquitetura do software.
+4. A validação das missões requer aprovação por score médio >= 8.0 e ausência de veto de segurança/regulatório.
+
+---
+
+
 ## 2026-06
 
 ### Arquitetura local-first
