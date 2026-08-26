@@ -1,6 +1,6 @@
 """
 LLM Client — Wrapper assíncrono para o Ollama local.
-Sprint 2: Resiliência, retry, exceções customizadas e saída limpa via rich.
+Sprint 3: Exceção unificada LLMProviderError para todos os erros de inferência.
 
 Localização: backend/core/llm_client.py
 """
@@ -8,6 +8,7 @@ Localização: backend/core/llm_client.py
 from __future__ import annotations
 
 import json
+from enum import Enum
 from typing import Any
 
 import httpx
@@ -19,23 +20,38 @@ console = Console(stderr=True)
 
 
 # ─────────────────────────────────────────
-# Exceções customizadas
+# Exceções
 # ─────────────────────────────────────────
 
-class OllamaUnavailableError(Exception):
-    """Ollama não está acessível no endereço configurado."""
+class LLMErrorKind(str, Enum):
+    UNAVAILABLE = "UNAVAILABLE"
+    TIMEOUT     = "TIMEOUT"
+    INVALID_JSON = "INVALID_JSON"
+    HTTP_ERROR  = "HTTP_ERROR"
 
 
-class OllamaTimeoutError(Exception):
-    """A inferência excedeu o tempo limite configurado."""
+class LLMProviderError(Exception):
+    """
+    Exceção unificada para erros do provedor LLM (Ollama).
+    Carrega kind para permitir tratamento diferenciado no chamador.
+    """
+
+    def __init__(self, message: str, kind: LLMErrorKind) -> None:
+        super().__init__(message)
+        self.kind = kind
+
+    def __str__(self) -> str:
+        return f"[{self.kind.value}] {super().__str__()}"
 
 
-class OllamaInvalidResponseError(Exception):
-    """O modelo não retornou um JSON válido conforme o schema esperado."""
+# Aliases para retrocompatibilidade com council.py (Sprint 2)
+OllamaUnavailableError  = LLMProviderError
+OllamaTimeoutError      = LLMProviderError
+OllamaInvalidResponseError = LLMProviderError
 
 
 # ─────────────────────────────────────────
-# Prompt de schema JSON obrigatório
+# Schema JSON obrigatório
 # ─────────────────────────────────────────
 
 _JUROR_JSON_SCHEMA: str = """
@@ -55,24 +71,12 @@ Valores válidos para verdict: "APPROVE" ou "VETO"
 # Helpers internos
 # ─────────────────────────────────────────
 
-def _build_payload(model: str, prompt: str) -> dict[str, Any]:
-    base_url: str = settings.ollama_base_url.rstrip("/").removesuffix("/v1")
-    return {
-        "url": f"{base_url}/api/generate",
-        "payload": {
-            "model": model,
-            "prompt": prompt,
-            "stream": True,
-            "options": {
-                "temperature": 0.2,
-                "num_ctx": 2048,
-            },
-        },
-    }
+def _resolve_url() -> str:
+    base = settings.ollama_base_url.rstrip("/").removesuffix("/v1")
+    return f"{base}/api/generate"
 
 
 def _clean_json(raw: str) -> str:
-    """Remove blocos de markdown que o modelo possa inserir ao redor do JSON."""
     raw = raw.strip()
     if raw.startswith("```"):
         lines = raw.splitlines()
@@ -83,8 +87,8 @@ def _clean_json(raw: str) -> str:
     return raw
 
 
-async def _stream_generate(url: str, payload: dict[str, Any], timeout: float) -> str:
-    """Executa streaming do Ollama e retorna o texto completo acumulado."""
+async def _stream(url: str, payload: dict[str, Any], timeout: float) -> str:
+    """Executa streaming e acumula tokens."""
     tokens: list[str] = []
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream("POST", url, json=payload) as response:
@@ -110,78 +114,74 @@ async def call_ollama_json(
     model: str | None = None,
 ) -> dict[str, Any]:
     """
-    Chama o Ollama via /api/generate com streaming e retorna dict JSON.
-
-    Resiliência:
-    - 1 retry automático em falhas transitórias (conexão / timeout)
-    - Exceções customizadas sem stack traces assustadores
-    - Timeout configurável via settings.ollama_timeout
+    Chama o Ollama via /api/generate com streaming.
+    1 retry automático em falhas transitórias.
 
     Raises:
-        OllamaUnavailableError: Ollama não está rodando.
-        OllamaTimeoutError: Inferência excedeu o timeout.
-        OllamaInvalidResponseError: Resposta não é JSON válido.
+        LLMProviderError: Para qualquer falha — conexão, timeout ou JSON inválido.
+                          Inspecione .kind para tratamento diferenciado.
     """
     target_model: str = model or settings.council_model
     timeout: float = settings.ollama_timeout
+    url: str = _resolve_url()
 
-    full_prompt: str = (
-        system_prompt
-        + "\n\n"
-        + _JUROR_JSON_SCHEMA
-        + "\n\n"
-        + user_prompt
-    )
+    payload: dict[str, Any] = {
+        "model": target_model,
+        "prompt": system_prompt + "\n\n" + _JUROR_JSON_SCHEMA + "\n\n" + user_prompt,
+        "stream": True,
+        "options": {"temperature": 0.2, "num_ctx": 2048},
+    }
 
-    build = _build_payload(target_model, full_prompt)
-    url: str = build["url"]
-    payload: dict = build["payload"]
-
-    # ── Tenta até 2 vezes (1 retry) ──────────────────
-    last_error: Exception | None = None
+    last_error: LLMProviderError | None = None
 
     for attempt in range(1, 3):
         try:
-            raw: str = await _stream_generate(url, payload, timeout)
+            raw = await _stream(url, payload, timeout)
             raw = _clean_json(raw)
 
             try:
                 return json.loads(raw)
             except json.JSONDecodeError:
-                raise OllamaInvalidResponseError(
-                    f"O modelo '{target_model}' não retornou JSON válido.\n"
-                    f"Conteúdo recebido: {raw[:300]}"
+                raise LLMProviderError(
+                    f"Modelo '{target_model}' não retornou JSON válido.\n"
+                    f"Conteúdo recebido: {raw[:300]}",
+                    kind=LLMErrorKind.INVALID_JSON,
                 )
 
-        except OllamaInvalidResponseError:
-            raise  # Não faz retry em resposta inválida — é falha do modelo
+        except LLMProviderError as e:
+            if e.kind == LLMErrorKind.INVALID_JSON:
+                raise  # JSON inválido não se recupera com retry
+            last_error = e
+            if attempt == 1:
+                console.print(
+                    f"[yellow]⚠ Tentativa {attempt} falhou "
+                    f"({e.kind.value}). Retentando...[/yellow]"
+                )
 
-        except httpx.ConnectError as e:
-            last_error = OllamaUnavailableError(
+        except httpx.ConnectError:
+            last_error = LLMProviderError(
                 f"Ollama não está acessível em '{settings.ollama_base_url}'.\n"
-                f"Inicie o serviço com: docker compose -f docker/docker-compose.yml up -d ollama"
+                "Inicie com: docker compose -f docker/docker-compose.yml up -d ollama",
+                kind=LLMErrorKind.UNAVAILABLE,
             )
             if attempt == 1:
-                console.print(
-                    f"[yellow]⚠ Tentativa {attempt} falhou (conexão). Retentando...[/yellow]"
-                )
+                console.print("[yellow]⚠ Tentativa 1 falhou (conexão). Retentando...[/yellow]")
 
-        except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout) as e:
-            last_error = OllamaTimeoutError(
-                f"A inferência com '{target_model}' excedeu {timeout}s.\n"
-                f"Dica: aumente OLLAMA_TIMEOUT no .env ou use um modelo menor (ex: gemma2:2b)."
+        except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout):
+            last_error = LLMProviderError(
+                f"Inferência com '{target_model}' excedeu {timeout}s.\n"
+                "Dica: aumente OLLAMA_TIMEOUT no .env ou use um modelo menor (gemma2:2b).",
+                kind=LLMErrorKind.TIMEOUT,
             )
             if attempt == 1:
-                console.print(
-                    f"[yellow]⚠ Tentativa {attempt} falhou (timeout). Retentando...[/yellow]"
-                )
+                console.print("[yellow]⚠ Tentativa 1 falhou (timeout). Retentando...[/yellow]")
 
         except httpx.HTTPStatusError as e:
-            raise OllamaUnavailableError(
-                f"Ollama retornou erro HTTP {e.response.status_code}.\n"
+            raise LLMProviderError(
+                f"Ollama retornou HTTP {e.response.status_code}.\n"
                 f"Verifique se o modelo '{target_model}' está disponível: "
-                f"docker exec founderai-ollama ollama list"
+                "docker exec founderai-ollama ollama list",
+                kind=LLMErrorKind.HTTP_ERROR,
             )
 
-    # Esgotou as tentativas
     raise last_error  # type: ignore[misc]

@@ -4,6 +4,45 @@
 
 ---
 
+## 2026-06
+
+### Arquitetura local-first
+**Decisão:** Rodar modelos localmente via Ollama.
+**Motivo:** Redução de custos operacionais e privacidade dos dados do usuário.
+**Status:** ✅ Confirmada
+
+---
+
+### Gemma 2 2B como modelo principal
+**Decisão:** Usar gemma2:2b para todos os agentes.
+**Motivo:** Eficiência — boa qualidade com baixo consumo de recursos em CPU.
+**Status:** ✅ Confirmada
+
+---
+
+### Sprint 2 — Resiliência e CLI (Junho 2026)
+**Decisões:**
+- `LLMProviderError` unificado com `LLMErrorKind` enum. Aliases de retrocompatibilidade mantidos.
+- Retry automático (1 tentativa) em falhas transitórias de conexão/timeout.
+- CLI refatorada com `rich` (Console, Panel, Table, Status/spinner).
+- Suporte a arquivos de contexto via `-f` / `--file`.
+- `backend/tools/file_tools.py` criado com validação de Path Traversal.
+- Histórico persistido em `docs/decisions_history.json` + `docs/DECISIONS.md`.
+**Status:** ✅ Concluída
+
+---
+
+### Sprint 3 — Confiabilidade, Observabilidade e UX (Agosto 2026)
+**Decisões:**
+- `backend/core/history.py` centraliza persistência (MD + JSON).
+- `prepare_context_payload()` com limites configuráveis: MAX_FILE_CHARS=10k, MAX_TOTAL_CONTEXT_CHARS=30k.
+- `ContextPayload` dataclass com included/truncated/omitted/warnings.
+- CLI: menu interativo, `--last`, `--rerun [ID]`, resumo de contexto com tamanho em KB.
+- `get_last_decision()` e `get_decision_by_id()` adicionados ao history.py.
+**Status:** ✅ Concluída
+
+---
+
 # DECISION LOG - FounderAI 2.0
 
 ## 📐 ADR-001: Runtime de Agentes Heterogêneos & Escopo do MVP
