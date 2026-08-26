@@ -1,72 +1,70 @@
-# Fundador IA
+# 🏛️ FounderAI (Fundador IA)
 
-> Sistema Operacional para Validação de Missões e Criação de Organizações Digitais Evolutivas.
+> **Conselho Consultivo Artificial para Validação de Missões e Ideias de Startups.**
 
-## Missão
+O **FounderAI** é um sistema de suporte à decisão projetado para ajudar empreendedores, desenvolvedores e gerentes de produto a responder a uma pergunta fundamental antes de escrever uma única linha de código:  
+👉 **"Esta missão/ideia realmente merece ser executada?"**
 
-**Reduzir o risco de construir a coisa errada.**
+Através de uma deliberação sequencial entre **jurados especializados com personas distintas** (Arquiteto de Software, Especialista em Segurança e Generalista de Negócios), o sistema analisa a missão, pondera riscos, aplica direitos de veto e emite um veredito final fundamentado.
 
-## O Problema
+---
 
-Empreendedores gastam meses ou anos desenvolvendo produtos sem validar adequadamente se existe mercado, demanda ou viabilidade.
+## 🎯 Principais Funcionalidades (Até a Sprint 2)
 
-## A Solução
+- 🧑‍⚖️ **Conselho Multi-Agente:** Avaliação sequencial com atribuição de notas (0-10), justificativas detalhadas e regras de veto por perfil.
+- 🎨 **Interface CLI Rica (`rich`):** Terminal interativo com spinners em tempo real, tabelas formatadas e painéis de veredito amigáveis.
+- 📁 **Injeção de Contexto Local (`-f` / `--file`):** Leitura segura de arquivos do repositório (ex: `README.md`, `docs/PRD.md`) para fundamentar as análises dos jurados.
+- 🛡️ **Segurança e Resiliência:** Leitura de arquivos com proteção contra *Path Traversal*, truncamento inteligente de caracteres e tratamento gracioso de erros de conexão/timeout com o LLM.
+- 💾 **Auditoria & Persistência Historica:** Registro automático de todas as deliberações e deliberações anteriores no arquivo `docs/DECISIONS.md`.
 
-Fundador IA atua como um Co-Fundador Digital que responde duas perguntas críticas:
+---
 
-1. **"Essa missão merece ser executada?"**
-2. **"Qual é o problema real por trás da ideia declarada?"**
+## 🛠️ Stack Tecnológica
 
-## Agentes do Sistema
+- **Linguagem:** Python 3.12+
+- **Provedor LLM:** Ollama (rodando localmente)
+- **Interface / CLI:** `rich` + `argparse`
+- **Validação de Dados:** Pydantic
+- **Persistência:** Markdown (`docs/DECISIONS.md`)
 
-| Agente | Entrada | Saída |
-|---|---|---|
-| Mission Intelligence | Ideia do usuário | Mission Brief |
-| Reality Engine | Mission Brief | Reality Report |
-| Contrarian Engine | Reality Report | Risk Report |
-| Mission Scorecard | Todos os relatórios | Score Visual |
-| Mission Memory | Todos os relatórios | Base histórica |
+---
 
-## Stack
+## 📂 Estrutura do Projeto
 
-- **Orquestração:** LangGraph
-- **Modelos:** Gemma 4 E4B + Qwen3 14B (via Ollama)
-- **Memória:** Mem0 + Qdrant + PostgreSQL
-- **Interface:** Chainlit
-- **Deploy:** Docker Compose
+```text
+FounderAI/
+├── backend/
+│   ├── core/
+│   │   ├── config.py          # Configurações globais (Timeouts, URLs do Ollama, etc.)
+│   │   ├── council.py         # Lógica de orquestração do Conselho e jurados
+│   │   ├── llm_client.py      # Client HTTP com tratamento de exceções e resiliência
+│   │   └── storage.py         # Persistência de auditoria em Markdown
+│   ├── schemas/               # Schemas Pydantic para estruturação das respostas
+│   └── tools/
+│       └── file_tools.py      # Leitura segura de arquivos locais e prevenção de Path Traversal
+├── docs/
+│   └── DECISIONS.md           # Histórico e log de decisões do Conselho
+├── main.py                    # Ponto de entrada da CLI (Interativo e via linha de comando)
+├── requirements.txt           # Dependências do projeto
+└── README.md                  # Documentação do projeto
 
-## Início Rápido
-
-```bash
 # 1. Clone o repositório
-git clone https://github.com/seu-usuario/fundador-ia.git
-cd fundador-ia
+git clone [https://github.com/seu-usuario/FounderAI.git](https://github.com/seu-usuario/FounderAI.git)
+cd FounderAI
 
-# 2. Suba os serviços
-docker compose up -d
+# 2. Crie e ative um ambiente virtual
+python -m venv .venv
+# No Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# No Linux/Mac:
+source .venv/bin/activate
 
-# 3. Instale dependências Python
-pip install -r backend/requirements.txt
+# 3. Instale as dependências
+pip install -r requirements.txt
 
-# 4. Rode a interface
-chainlit run frontend/app.py
-```
+# 4. Garanta que o modelo no Ollama esteja pronto (ex: llama3 / qwen2.5 / deepseek-r1)
+ollama run llama3
 
-## Estrutura do Projeto
-
-```
-FundadorIA/
-├── docs/           # Documentação e constituição do projeto
-├── backend/        # Agentes, core e API
-├── frontend/       # Interface Chainlit
-├── database/       # Schemas e migrations
-├── memory/         # Configuração da camada de memória
-├── missions/       # Missões salvas (output)
-├── tests/          # Testes unitários e de integração
-├── docker/         # Dockerfiles e configurações
-└── scripts/        # Scripts utilitários
-```
-
-## Status
-
-🚧 Em desenvolvimento — Sprint 1: Mission Intelligence
+python main.py "Quero criar uma plataforma de gestão financeira voltada para MEIs no Brasil"
+python main.py "Avaliar viabilidade de refatorar a CLI para suporte a mapas de memória" -f README.md
+python main.py
