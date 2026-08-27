@@ -1,6 +1,6 @@
 """
 History — Persistência de deliberações do Conselho Consultivo.
-Sprint 3: Salva em DECISIONS.md (legível) e decisions_history.json (estruturado).
+Sprint 4: Append seguro que preserva cabeçalho e ADR-002 no DECISIONS.md.
 
 Localização: backend/core/history.py
 """
@@ -22,6 +22,10 @@ _DOCS_DIR: Path = Path(__file__).parent.parent.parent / "docs"
 _MD_PATH: Path = _DOCS_DIR / "DECISIONS.md"
 _JSON_PATH: Path = _DOCS_DIR / "decisions_history.json"
 
+# Âncora que marca onde as deliberações dinâmicas devem ser inseridas.
+# Tudo acima (incluindo ADR-002) é conteúdo estático e jamais é tocado.
+_ANCHOR: str = "<!-- ANCHOR_DELIBERATIONS -->"
+
 
 def _ensure_docs_dir() -> None:
     _DOCS_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,12 +41,10 @@ def save_council_decision(
 ) -> str:
     """
     Persiste a decisão em dois formatos:
-      - docs/DECISIONS.md  (Markdown amigável, append)
-      - docs/decisions_history.json  (JSON estruturado, lista)
+      - docs/DECISIONS.md  (Markdown, append após âncora)
+      - docs/decisions_history.json  (JSON estruturado)
 
-    Args:
-        decision: Objeto CouncilDecision a persistir.
-        context_files: Arquivos de contexto usados na deliberação.
+    O cabeçalho e o ADR-002 nunca são modificados.
 
     Returns:
         ID único da deliberação (UUID4).
@@ -58,13 +60,13 @@ def save_council_decision(
     return deliberation_id
 
 
-def _append_markdown(
+def _build_md_block(
     decision: CouncilDecision,
     deliberation_id: str,
     timestamp: str,
     context_files: list[str],
-) -> None:
-    """Faz append formatado no DECISIONS.md."""
+) -> str:
+    """Monta o bloco Markdown de uma deliberação."""
     verdict_emoji = "✅" if decision.final_verdict == "APPROVED" else "❌"
 
     lines: list[str] = [
@@ -100,8 +102,41 @@ def _append_markdown(
         lines.append(f"  > {r.reasoning}")
         lines.append("")
 
-    with open(_MD_PATH, "a", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+    return "\n".join(lines) + "\n"
+
+
+def _append_markdown(
+    decision: CouncilDecision,
+    deliberation_id: str,
+    timestamp: str,
+    context_files: list[str],
+) -> None:
+    """
+    Insere a deliberação no DECISIONS.md APÓS a âncora.
+    Se a âncora não existir, faz append simples no final do arquivo.
+    O conteúdo acima da âncora (incluindo ADR-002) nunca é modificado.
+    """
+    block = _build_md_block(decision, deliberation_id, timestamp, context_files)
+
+    if not _MD_PATH.exists():
+        # Cria arquivo mínimo com âncora
+        _MD_PATH.write_text(
+            "# DECISIONS.md\n\n"
+            "> Registro de decisões arquiteturais e estratégicas do projeto.\n\n"
+            f"{_ANCHOR}\n",
+            encoding="utf-8",
+        )
+
+    current = _MD_PATH.read_text(encoding="utf-8")
+
+    if _ANCHOR in current:
+        # Insere logo após a âncora, preservando tudo que veio antes
+        updated = current.replace(_ANCHOR, _ANCHOR + "\n" + block, 1)
+        _MD_PATH.write_text(updated, encoding="utf-8")
+    else:
+        # Âncora não encontrada — append seguro no final
+        with open(_MD_PATH, "a", encoding="utf-8") as f:
+            f.write(block)
 
 
 def _append_json(
@@ -110,8 +145,7 @@ def _append_json(
     timestamp: str,
     context_files: list[str],
 ) -> None:
-    """Faz append estruturado no decisions_history.json."""
-    # Lê histórico existente
+    """Adiciona entrada estruturada no decisions_history.json."""
     history: list[dict] = _load_json()
 
     entry: dict = {
@@ -155,33 +189,19 @@ def _load_json() -> list[dict]:
 
 
 def get_recent_decisions(limit: int = 5) -> list[dict]:
-    """
-    Retorna as últimas N deliberações do histórico JSON.
-
-    Args:
-        limit: Número máximo de deliberações a retornar.
-
-    Returns:
-        Lista de dicts com os campos da deliberação, ordem mais recente primeiro.
-    """
+    """Retorna as últimas N deliberações, ordem mais recente primeiro."""
     history = _load_json()
-    return history[-limit:][::-1]  # últimas N, ordem decrescente
+    return history[-limit:][::-1]
 
 
 def get_last_decision() -> dict | None:
-    """
-    Retorna a deliberação mais recente do histórico JSON.
-    Retorna None se o histórico estiver vazio ou inexistente.
-    """
+    """Retorna a deliberação mais recente ou None."""
     history = _load_json()
     return history[-1] if history else None
 
 
 def get_decision_by_id(deliberation_id: str) -> dict | None:
-    """
-    Busca uma deliberação pelo ID único.
-    Retorna None se não encontrada.
-    """
+    """Busca uma deliberação pelo ID único."""
     for entry in _load_json():
         if entry.get("id") == deliberation_id:
             return entry

@@ -43,6 +43,77 @@
 
 ---
 
+## ADR-002 — Congelamento Oficial do MVP v2.0 (Agosto/2026)
+
+- **Data:** 27 de Agosto de 2026
+- **Status:** APROVADO & CONGELADO
+- **Participantes:** Juan, Grok (Guardião do Tempo), Gemini (Arquiteto)
+
+### Contexto
+
+Encerramento oficial do ciclo inicial de desenvolvimento do FounderAI v2.0. O sistema atingiu estabilidade funcional como CLI interativa e automatizada para validação de missões de produto via Conselho Consultivo AI.
+
+### Escopo Incluído no MVP v2.0
+
+- Conselho Consultivo Sequencial com 3 papéis fixos (Architect, SecurityCoder, Generalist).
+- Interface CLI moderna (`rich`) com menu interativo, tabelas formatadas, spinners e painéis de erro graciosos.
+- Gerenciamento seguro de contexto (`-f` / `--file`) com mitigação de Path Traversal e limite de payload (`prepare_context_payload`).
+- Persistência dupla auditável: Markdown (`docs/DECISIONS.md`) e JSON estruturado (`docs/decisions_history.json`).
+- Modos de navegação e reexecução: `--history` (`-n`), `--last` e `--rerun <ID>`.
+- Tratamento defensivo de erros de conexão HTTP/Timeout com Ollama local.
+
+### Escopo Explicitamente Fora do MVP (Congelado para v3.0+)
+
+- Execução de código / Sandbox.
+- Provedores Cloud (Groq, OpenRouter, OpenAI).
+- Múltiplas rodadas de debate ou troca de papéis dinâmicos.
+- Interface Web / Frontend gráfico.
+- Banco de dados vetorial / RAG avançado.
+
+---
+<!-- ANCHOR_DELIBERATIONS -->
+
+
+
+## 2026-06
+
+### Arquitetura local-first
+**Decisão:** Rodar modelos localmente via Ollama.
+**Motivo:** Redução de custos operacionais e privacidade dos dados do usuário.
+**Status:** ✅ Confirmada
+
+---
+
+### Gemma 2 2B como modelo principal
+**Decisão:** Usar gemma2:2b para todos os agentes.
+**Motivo:** Eficiência — boa qualidade com baixo consumo de recursos em CPU.
+**Status:** ✅ Confirmada
+
+---
+
+### Sprint 2 — Resiliência e CLI (Junho 2026)
+**Decisões:**
+- `LLMProviderError` unificado com `LLMErrorKind` enum. Aliases de retrocompatibilidade mantidos.
+- Retry automático (1 tentativa) em falhas transitórias de conexão/timeout.
+- CLI refatorada com `rich` (Console, Panel, Table, Status/spinner).
+- Suporte a arquivos de contexto via `-f` / `--file`.
+- `backend/tools/file_tools.py` criado com validação de Path Traversal.
+- Histórico persistido em `docs/decisions_history.json` + `docs/DECISIONS.md`.
+**Status:** ✅ Concluída
+
+---
+
+### Sprint 3 — Confiabilidade, Observabilidade e UX (Agosto 2026)
+**Decisões:**
+- `backend/core/history.py` centraliza persistência (MD + JSON).
+- `prepare_context_payload()` com limites configuráveis: MAX_FILE_CHARS=10k, MAX_TOTAL_CONTEXT_CHARS=30k.
+- `ContextPayload` dataclass com included/truncated/omitted/warnings.
+- CLI: menu interativo, `--last`, `--rerun [ID]`, resumo de contexto com tamanho em KB.
+- `get_last_decision()` e `get_decision_by_id()` adicionados ao history.py.
+**Status:** ✅ Concluída
+
+---
+
 # DECISION LOG - FounderAI 2.0
 
 ## 📐 ADR-001: Runtime de Agentes Heterogêneos & Escopo do MVP
