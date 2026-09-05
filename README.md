@@ -1,118 +1,58 @@
-Markdown
-# 🤖 FounderAI — Conselho Consultivo AI (v2.0-MVP)
+# FounderAI 🚀
 
-[![Status](https://img.shields.io/badge/Status-APROVADO%20%26%20CONGELADO-brightgreen)](#)
-[![Release](https://img.shields.io/badge/Release-v2.0--MVP-blue)](#)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-informational)](#)
-[![Architecture](https://img.shields.io/badge/Architecture-CLI%20%7C%20Local%20LLM-orange)](#)
-
-O **FounderAI** é uma ferramenta CLI (Command Line Interface) interativa, resiliente e automatizada criada para auxiliar fundadores, arquitetos de software e gerentes de produto na validação rigorosa de missões, ideias de produto e decisões estratégicas.
-
-A validação é conduzida por um **Conselho Consultivo de IA** autônomo e multi-agente, rodando sobre infraestrutura local privativa via Ollama.
+O **FounderAI** é uma ferramenta de apoio à validação de ideias de startups e software. Ele utiliza um conselho de agentes LLM especializados (*Architect*, *SecurityCoder* e *Generalist*) para analisar propostas, identificar riscos técnicos/negócios e emitir um parecer deliberativo transparente.
 
 ---
 
-## 🏛️ O Conselho Consultivo
+## 📌 Novidades da Versão 3.0 (Sprint 4)
 
-O sistema submete cada missão a um fluxo sequencial de avaliação por três jurados especializados com diretrizes estritas:
+A versão 3.0 recalibrou os critérios do conselho para eliminar falsos-positivos de veto identificados em modelos menores (`2b`), promovendo deliberações mais equilibradas sem perder o rigor técnico:
 
-* **🏗️ Architect:** Analisa a viabilidade técnica, complexidade de implementação, arquitetura de software e escalabilidade da proposta.
-* **🛡️ SecurityCoder:** Avalia a postura de segurança, privacidade de dados, conformidade regulatória (LGPD, PCI-DSS) e riscos operacionais graves. Possui **poder de VETO absoluto** no conselho.
-* **💼 Generalist:** Examina o potencial comercial, adequação ao mercado brasileiro, viabilidade financeira e pragmatismo do modelo de negócios.
-
----
-
-## 🏗️ Arquitetura & Fluxo do Sistema
-
-                    [ Entrada da Missão ]
-                    ( + Arquivo Opção -f )
-                              │
-                              ▼
-               ┌──────────────────────────────┐
-               │   Análise de Riscos & Input  │
-               │ (Truncamento & Path Traversal)│
-               └──────────────┬───────────────┘
-                              │
-                              ▼
-            ┌──────────────────────────────────┐
-            │     Conselho Consultivo AI       │
-            │ ──────────────────────────────── │
-            │  1. Architect (Score / Nota)     │
-            │  2. SecurityCoder (Score / VETO) │
-            │  3. Generalist (Score / Nota)    │
-            └─────────────────┬────────────────┘
-                              │
-                              ▼
-                ┌───────────────────────────┐
-                │  Cálculo do Veredito      │
-                │  & Persistência Dupla     │
-                └─────────────┬─────────────┘
-                              │
-          ┌───────────────────┴───────────────────┐
-          ▼                                       ▼
- [ docs/DECISIONS.md ]              [ docs/decisions_history.json ]
-(Relatório Markdown Humano)             (Estrutura JSON / Reexecução)
-
+* **Módulo C1 — Isolamento de System Prompts:** Prompts de cada jurado agora vivem em arquivos externos versionados com mecanismo de *fallback* resiliente a erros de I/O e encoding.
+* **Módulo C2 — Parsing & Auto-Correção:** Validação estrita entre nota (*score*) e veredito (*verdict*), com disparos automáticos de *retry* técnico antes de acionar respostas *fallback*.
+* **Módulo C3 — Matriz de Decisão Centralizada:** Lógica de deliberação unificada com limiares ajustados:
+  * **Aprovado:** Média geral $\ge 7.5$, sem vetos e nota do *SecurityCoder* $\ge 6.0$.
+  * **Rejeitado:** Presença de VETO, nota do *SecurityCoder* $< 6.0$ ou média $< 7.5$.
+* **Observabilidade Clara:** Motivos detalhados da recusa/aprovação expostos diretamente no resultado da deliberação.
+* **Alta Cobertura de Testes:** Bateria de testes de regressão executada em $<0.5s$ para garantir consistência operacional.
 
 ---
 
-## 🚀 Como Executar
+## 🛠️ Arquitetura do Conselho
 
-### 1. Pré-requisitos
-* **Python 3.10+**
-* **Ollama** instalado e configurado
+| Agente | Foco Principal | LimiarCrítico |
+| :--- | :--- | :--- |
+| **Architect** | Escalabilidade, acoplamento e viabilidade técnica | Avalia arquitetura e padrão de projeto |
+| **SecurityCoder** | Vulnerabilidades, exposição de dados e boas práticas | Reprovado se nota $< 6.0$ ou VETO |
+| **Generalist** | Modelo de negócios, produto e aderência ao mercado | Avalia viabilidade geral da proposta |
 
 ---
 
-### 2. Inicializando o Provedor Local (Ollama)
+## 🚀 Como Rodar o Projeto
 
-Você pode executar o Ollama de duas formas equivalentes:
+### Pré-requisitos
+* Python 3.12+
+* Ambiente virtual (`.venv`) ativado
 
-**Via Docker Compose (Recomendado para ambientes containerizados):**
+### Instalação
 ```bash
-docker compose -f docker/docker-compose.yml up -d ollama
-Via Ollama Nativo (Instalado diretamente no Sistema Operacional):
+# Clone o repositório
+git clone [https://github.com/seu-usuario/FounderAI.git](https://github.com/seu-usuario/FounderAI.git)
+cd FounderAI
 
-Bash
-ollama run gemma2:2b
-3. Instalação de Dependências
-Certifique-se de ativar seu ambiente virtual (.venv) no terminal do projeto e instale os pacotes necessários:
+# Crie e ative o ambiente virtual
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
 
-Bash
+# Instale as dependências
 pip install -r requirements.txt
-💻 Interface de Linha de Comando (CLI)
-O FounderAI conta com uma interface rica e amigável desenvolvida em rich, garantindo respostas visuais claras, tabelas formatadas e spinners de progresso.
 
-🔹 Submeter uma nova missão
+
+# Executando os Testes
+Para rodar a suíte completa de testes unitários e de regressão (v3.0):
+
 Bash
-python main.py "Validar viabilidade de um super app de produtividade urbana"
-🔹 Submeter uma missão anexando um arquivo de contexto
-Bash
-python main.py "Validar arquitetura e segurança do projeto" -f README.md
-🔹 Consultar o histórico de deliberações
-Bash
-python main.py --history -n 5
-🔹 Reexecutar a última missão submetida
-Bash
-python main.py --last
-🔹 Reexecutar uma missão específica por ID
-Bash
-python main.py --rerun 37daafd5-e464-4c4a-aaf1-f2121dcec850
-🛡️ Auditoria e Persistência Dupla
-Todas as deliberações geradas pelo Conselho possuem rastreabilidade total e geram registros imutáveis gravados simultaneamente em dois formatos:
-
-docs/DECISIONS.md — Histórico humano contendo ADRs (Architecture Decision Records) e relatórios detalhados em Markdown.
-
-docs/decisions_history.json — Base estruturada legível por máquina, garantindo reexecuções exatas (--rerun) e consultas via CLI (--history).
-
-📌 Histórico de Decisões de Arquitetura (ADRs)
-[ADR-001] Escolha de Execução Local Sequencial com Ollama e gemma2:2b.
-
-[ADR-002] Congelamento Oficial do MVP v2.0 e Definição de Escopo de Manutenção (Agosto/2026).
-
-📋 Status da Release
-Versão: v2.0-MVP
-
-Status: APROVADO & CONGELADO
-
-Data de Encerramento: 27 de Agosto de 2026
+pytest tests/unit/ -v --asyncio-mode=auto
+📝 Documentação
+Para entender as motivações técnicas por trás dos limiares da v3.0 e a evolução dos prompts, consulte docs/DECISIONS.md
