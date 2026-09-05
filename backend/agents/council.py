@@ -1,66 +1,79 @@
 """
 Council — Conselho Consultivo Artificial.
-Orquestra 3 jurados fixos que avaliam uma missão sequencialmente.
-
-Sprint 2: Suporte a arquivos de contexto injetados nos prompts dos jurados.
-
-Regra de Negócio (APPROVED):
-  - Média dos scores >= 8.0
-  - SecurityCoder NÃO emitiu VETO
-  - SecurityCoder score >= 5.0
+Módulo C2: System Prompts carregados de arquivos externos versionados (v3).
+Módulo C1: Retry para respostas inconsistentes + fallback seguro.
+Módulo C3: Decisão final via compute_final_verdict (limiares v3.0).
 """
 
 from __future__ import annotations
 
 from typing import List
 
+from pydantic import ValidationError
+from rich.console import Console
+
 from backend.core.config import settings
 from backend.core.llm_client import (
+    LLMProviderError,
     OllamaInvalidResponseError,
     OllamaTimeoutError,
     OllamaUnavailableError,
     call_ollama_json,
 )
+from backend.core.prompt_loader import load_prompt
+from backend.core.verdict import compute_final_verdict
 from backend.schemas.council import CouncilDecision, JurorResponse, JurorVerdict
 
+console = Console(stderr=True)
+
 # ─────────────────────────────────────────
-# Definição dos Jurados
+# Fallback seguro (Módulo C1)
+# ─────────────────────────────────────────
+
+_FALLBACK_SCORE: float = 4.0
+_FALLBACK_VERDICT: JurorVerdict = JurorVerdict.VETO
+_FALLBACK_REASONING: str = (
+    "[FALLBACK] Resposta inconsistente após retry. "
+    "Veredito conservador aplicado automaticamente."
+)
+
+# ─────────────────────────────────────────
+# Definição dos Jurados (Módulo C2)
 # ─────────────────────────────────────────
 
 JURORS: List[dict] = [
-    {
-        "name": "Architect",
-        "system_prompt": (
-            "Você é o Architect, um jurado do Conselho Consultivo do Fundador IA. "
-            "Sua especialidade é avaliar a viabilidade técnica e arquitetural de missões. "
-            "Você analisa se a solução proposta é tecnicamente exequível, escalável e coerente. "
-            "Seja direto, técnico e imparcial. Não seja otimista por padrão."
-        ),
-    },
-    {
-        "name": "SecurityCoder",
-        "system_prompt": (
-            "Você é o SecurityCoder, um jurado do Conselho Consultivo do Fundador IA. "
-            "Sua especialidade é segurança, privacidade de dados, compliance e riscos técnicos críticos. "
-            "Você tem poder de VETO absoluto: se identificar risco de segurança grave ou problema "
-            "regulatório crítico (ex: LGPD, PCI-DSS), emita VETO independente dos outros jurados. "
-            "Seja rigoroso. Um score abaixo de 5.0 indica missão inviável do ponto de vista de segurança."
-        ),
-    },
-    {
-        "name": "Generalist",
-        "system_prompt": (
-            "Você é o Generalist, um jurado do Conselho Consultivo do Fundador IA. "
-            "Sua especialidade é avaliar o potencial de mercado, modelo de negócio e viabilidade geral. "
-            "Você considera o contexto brasileiro: comportamento do consumidor, poder de compra, "
-            "burocracia e maturidade do mercado. Seja pragmático e realista."
-        ),
-    },
+    {"name": "Architect"},
+    {"name": "SecurityCoder"},
+    {"name": "Generalist"},
 ]
 
 
+def _resolve_jurors() -> List[dict]:
+    """Carrega system_prompts dos arquivos externos em runtime."""
+    return [
+        {"name": j["name"], "system_prompt": load_prompt(j["name"])}
+        for j in JURORS
+    ]
+
+
 # ─────────────────────────────────────────
-# Avaliação individual
+# Prompt de correção para retry (Módulo C1)
+# ─────────────────────────────────────────
+
+def _correction_prompt(juror_name: str, raw: dict, error_msg: str) -> str:
+    return (
+        f"Sua resposta anterior foi rejeitada por inconsistência:\n"
+        f"  score={raw.get('score')} | verdict={raw.get('verdict')}\n"
+        f"  Motivo: {error_msg}\n\n"
+        f"Regras obrigatórias:\n"
+        f"  - Se verdict=VETO, o score DEVE ser menor que 7.0\n"
+        f"  - Se verdict=APPROVE, o score DEVE ser maior ou igual a 5.0\n\n"
+        f"Corrija e retorne um JSON válido para {juror_name}."
+    )
+
+
+# ─────────────────────────────────────────
+# Avaliação individual com retry (Módulo C1)
 # ─────────────────────────────────────────
 
 async def _evaluate_juror(
@@ -70,11 +83,7 @@ async def _evaluate_juror(
 ) -> JurorResponse:
     """
     Executa a avaliação de um único jurado.
-
-    Args:
-        juror: Dicionário com name e system_prompt.
-        mission: Texto da missão a ser avaliada.
-        context_block: Bloco de contexto de arquivos (opcional).
+    Retry em inconsistência → fallback seguro se retry falhar.
     """
     context_section = f"\n{context_block}" if context_block else ""
 
@@ -87,22 +96,59 @@ async def _evaluate_juror(
         f"Seu juror_name deve ser exatamente: {juror['name']}"
     )
 
+    # ── Tentativa 1 ──────────────────────────────────────────────────────────
+    raw: dict = {}
+    first_error: str = ""
+
     try:
-        raw: dict = await call_ollama_json(
+        raw = await call_ollama_json(
             system_prompt=juror["system_prompt"],
             user_prompt=user_prompt,
             model=settings.council_model,
         )
-    except (OllamaUnavailableError, OllamaTimeoutError, OllamaInvalidResponseError) as e:
+    except (LLMProviderError, OllamaUnavailableError,
+            OllamaTimeoutError, OllamaInvalidResponseError) as e:
         raise RuntimeError(f"[{juror['name']}] {e}") from e
 
     raw["juror_name"] = juror["name"]
-
-    # Trunca reasoning para respeitar limite do schema
     if isinstance(raw.get("reasoning"), str) and len(raw["reasoning"]) > 500:
         raw["reasoning"] = raw["reasoning"][:497] + "..."
 
-    return JurorResponse(**raw)
+    try:
+        return JurorResponse(**raw)
+    except (ValidationError, Exception) as e:
+        first_error = str(e)
+
+    # ── Retry ─────────────────────────────────────────────────────────────────
+    console.print(
+        f"[bold yellow][WARNING][/bold yellow] Resposta inconsistente para "
+        f"[bold]{juror['name']}[/bold]. Executando retry..."
+    )
+
+    try:
+        raw_retry: dict = await call_ollama_json(
+            system_prompt=juror["system_prompt"],
+            user_prompt=_correction_prompt(juror["name"], raw, first_error),
+            model=settings.council_model,
+        )
+        raw_retry["juror_name"] = juror["name"]
+        if isinstance(raw_retry.get("reasoning"), str) and len(raw_retry["reasoning"]) > 500:
+            raw_retry["reasoning"] = raw_retry["reasoning"][:497] + "..."
+        return JurorResponse(**raw_retry)
+
+    except Exception as retry_err:
+        # ── Fallback seguro ───────────────────────────────────────────────────
+        console.print(
+            f"[bold red][FALLBACK][/bold red] Retry falhou para "
+            f"[bold]{juror['name']}[/bold]: {retry_err}\n"
+            f"  Aplicando: VETO / score={_FALLBACK_SCORE}"
+        )
+        return JurorResponse(
+            juror_name=juror["name"],
+            score=_FALLBACK_SCORE,
+            verdict=_FALLBACK_VERDICT,
+            reasoning=_FALLBACK_REASONING,
+        )
 
 
 # ─────────────────────────────────────────
@@ -115,52 +161,29 @@ async def run_council(
 ) -> CouncilDecision:
     """
     Executa o Conselho Consultivo de forma SEQUENCIAL.
-
-    Args:
-        mission: Texto da missão a ser avaliada.
-        context_files: Lista opcional de caminhos de arquivos de contexto.
-
-    Regra de Negócio:
-        APPROVED se: média >= 8.0 AND SecurityCoder não deu VETO AND SecurityCoder score >= 5.0
+    Decisão final via compute_final_verdict (limiares v3.0).
     """
-    # Monta bloco de contexto uma única vez para todos os jurados
     context_block: str = ""
     if context_files:
         from backend.tools.file_tools import build_context_block
         context_block = build_context_block(context_files)
 
+    resolved_jurors = _resolve_jurors()
     responses: List[JurorResponse] = []
 
-    for juror in JURORS:
+    for juror in resolved_jurors:
         print(f"  🧑‍⚖️  Jurado [{juror['name']}] avaliando...")
         response = await _evaluate_juror(juror, mission, context_block)
         responses.append(response)
         print(f"     Score: {response.score:.1f} | Veredicto: {response.verdict.value}")
 
-    # ── Regra de Negócio ──
-    average_score: float = round(
-        sum(r.score for r in responses) / len(responses), 2
-    )
-
-    security: JurorResponse | None = next(
-        (r for r in responses if r.juror_name == "SecurityCoder"), None
-    )
-    security_vetoed: bool = (
-        security is not None and security.verdict == JurorVerdict.VETO
-    )
-    security_score_ok: bool = (
-        security is not None and security.score >= 5.0
-    )
-
-    final_verdict = (
-        "APPROVED"
-        if average_score >= 8.0 and not security_vetoed and security_score_ok
-        else "REJECTED"
-    )
+    # ── Decisão final via função pura (Módulo C3) ─────────────────────────────
+    result = compute_final_verdict(responses)
 
     return CouncilDecision(
         mission=mission,
-        final_verdict=final_verdict,
-        average_score=average_score,
+        final_verdict=result.final_verdict,
+        average_score=result.average_score,
+        reason=result.reason,
         juror_responses=responses,
     )

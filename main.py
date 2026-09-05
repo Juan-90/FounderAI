@@ -237,10 +237,9 @@ def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
     if not file_paths:
         return "", []
 
-    try:
-        from backend.tools.file_tools import _PROJECT_ROOT, prepare_context_payload
-    except Exception as e:
-        _exit_error("Falha ao carregar módulo de arquivos.", e)
+    from backend.tools.file_tools import _PROJECT_ROOT, prepare_context_payload  # noqa: PLC0415
+
+    project_root: Path = Path(_PROJECT_ROOT)  # type annotation explícita elimina Unbound
 
     try:
         payload = prepare_context_payload(file_paths)
@@ -252,7 +251,7 @@ def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
         console.print("[dim]📁 Contexto Anexado:[/dim]")
         for f in payload.included_files:
             try:
-                size_kb = (_PROJECT_ROOT / f).stat().st_size / 1024
+                size_kb = (project_root / f).stat().st_size / 1024
                 size_str = f"{size_kb:.1f} KB"
             except OSError:
                 size_str = "? KB"
@@ -390,12 +389,17 @@ def _render_scores_table(decision) -> None:
 
 def _render_final_verdict(decision) -> None:
     approved = decision.final_verdict == "APPROVED"
+    reason_line = (
+        f"\n[dim]Motivo: [/dim][italic]{decision.reason}[/italic]"
+        if getattr(decision, "reason", "") else ""
+    )
     console.print()
     console.print(
         Panel(
             f"{'✅' if approved else '❌'} Veredito Final: "
             f"{'[bold green]APPROVED[/bold green]' if approved else '[bold red]REJECTED[/bold red]'}\n"
-            f"[dim]Score Médio: [/dim][bold]{decision.average_score:.2f}/10.0[/bold]",
+            f"[dim]Score Médio: [/dim][bold]{decision.average_score:.2f}/10.0[/bold]"
+            f"{reason_line}",
             title="[bold]🎯 Decisão do Conselho[/bold]",
             border_style="green" if approved else "red",
             padding=(1, 2),

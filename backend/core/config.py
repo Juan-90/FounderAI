@@ -7,14 +7,14 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # ── Ollama ──────────────────────────────────────
+    # Ollama
     ollama_base_url: str = "http://localhost:11434/v1"
-    ollama_timeout: float = 60.0          # Sprint 2: adequado para CPU inference
+    ollama_timeout: float = 60.0
     model_primary: str = "gemma2:2b"
     model_reasoning: str = "gemma2:2b"
-    council_model: str = "gemma2:2b"      # Sprint 2: modelo leve para o Conselho
+    council_model: str = "gemma2:2b"
 
-    # ── PostgreSQL ───────────────────────────────────
+    # PostgreSQL
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "fundador_ia"
@@ -28,20 +28,21 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
-    # ── Qdrant ───────────────────────────────────────
+    # Qdrant
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
     qdrant_collection: str = "missions"
 
-    # ── App ──────────────────────────────────────────
+    # App
     app_name: str = "Fundador IA"
     app_version: str = "0.2.0"
     debug: bool = False
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 settings = Settings()
