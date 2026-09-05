@@ -1,86 +1,118 @@
-# 🏛️ FounderAI (Fundador IA)
+Markdown
+# 🤖 FounderAI — Conselho Consultivo AI (v2.0-MVP)
 
-> **Conselho Consultivo Artificial para Validação de Missões e Ideias de Startups.**
+[![Status](https://img.shields.io/badge/Status-APROVADO%20%26%20CONGELADO-brightgreen)](#)
+[![Release](https://img.shields.io/badge/Release-v2.0--MVP-blue)](#)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-informational)](#)
+[![Architecture](https://img.shields.io/badge/Architecture-CLI%20%7C%20Local%20LLM-orange)](#)
 
-O **FounderAI** é um sistema de suporte à decisão projetado para ajudar empreendedores, desenvolvedores e gerentes de produto a responder a uma pergunta fundamental antes de escrever uma única linha de código:  
-👉 **"Esta missão/ideia realmente merece ser executada?"**
+O **FounderAI** é uma ferramenta CLI (Command Line Interface) interativa, resiliente e automatizada criada para auxiliar fundadores, arquitetos de software e gerentes de produto na validação rigorosa de missões, ideias de produto e decisões estratégicas.
 
-Através de uma deliberação sequencial entre **jurados especializados com personas distintas** (Arquiteto de Software, Especialista em Segurança e Generalista de Negócios), o sistema analisa a missão, pondera riscos, aplica direitos de veto e emite um veredito final fundamentado.
-
----
-
-## 🎯 Principais Funcionalidades (Até a Sprint 3)
-
-- 🧑‍⚖️ **Conselho Multi-Agente:** Avaliação sequencial com atribuição de notas (0-10), justificativas detalhadas e regras de veto por perfil.
-- 🎨 **Interface CLI Rica (`rich`):** Terminal interativo com spinners em tempo real, tabelas formatadas, menus de navegação e painéis de veredito amigáveis.
-- 📁 **Gerenciamento Inteligente de Contexto (`-f` / `--file`):** Leitura segura de arquivos do repositório com limites configuráveis de caracteres (`prepare_context_payload`) para evitar estouro da janela do LLM.
-- 📊 **Histórico e Persistência Dupla:** Registro automático e auditável em formato humano (`docs/DECISIONS.md`) e em formato estruturado (`docs/decisions_history.json`).
-- 📜 **Visualização de Histórico (`--history` / `-h`):** Comando para listar as últimas deliberações em tabela estilizada no terminal.
-- 🔄 **Reexecução de Deliberações (`--last` e `--rerun`):** Capacidade de reexecutar a última missão enviada ao Conselho ou resgatar uma deliberação antiga por ID para reavaliação.
-- 🛡️ **Segurança e Resiliência:** Prevenção contra *Path Traversal*, captura defensiva de IDs inexistentes e tratamento gracioso de falhas/timeouts de conexão com o Ollama.
+A validação é conduzida por um **Conselho Consultivo de IA** autônomo e multi-agente, rodando sobre infraestrutura local privativa via Ollama.
 
 ---
 
-## 🛠️ Stack Tecnológica
+## 🏛️ O Conselho Consultivo
 
-- **Linguagem:** Python 3.12+
-- **Provedor LLM:** Ollama (rodando localmente)
-- **Interface / CLI:** `rich` + `argparse`
-- **Validação de Dados:** Pydantic
-- **Persistência:** JSON (`docs/decisions_history.json`) + Markdown (`docs/DECISIONS.md`)
+O sistema submete cada missão a um fluxo sequencial de avaliação por três jurados especializados com diretrizes estritas:
+
+* **🏗️ Architect:** Analisa a viabilidade técnica, complexidade de implementação, arquitetura de software e escalabilidade da proposta.
+* **🛡️ SecurityCoder:** Avalia a postura de segurança, privacidade de dados, conformidade regulatória (LGPD, PCI-DSS) e riscos operacionais graves. Possui **poder de VETO absoluto** no conselho.
+* **💼 Generalist:** Examina o potencial comercial, adequação ao mercado brasileiro, viabilidade financeira e pragmatismo do modelo de negócios.
 
 ---
 
-## 📂 Estrutura do Projeto
+## 🏗️ Arquitetura & Fluxo do Sistema
 
-```text
-FounderAI/
-├── backend/
-│   ├── core/
-│   │   ├── config.py          # Configurações globais (Timeouts, URLs do Ollama, etc.)
-│   │   ├── council.py         # Orquestração do Conselho e regras de deliberação
-│   │   ├── history.py         # Gerenciador de persistência em JSON e consulta de histórico
-│   │   ├── llm_client.py      # Client HTTP resiliente com tratamento de exceções
-│   │   └── storage.py         # Formatação e persistência de auditoria em Markdown
-│   ├── schemas/               # Schemas Pydantic para estruturação das respostas
-│   └── tools/
-│       └── file_tools.py      # Leitura segura de arquivos, prevenção de Path Traversal e gestão de payload
-├── docs/
-│   ├── DECISIONS.md           # Histórico legível de decisões do Conselho
-│   └── decisions_history.json # Histórico estruturado para auditoria e re-runs
-├── main.py                    # Ponto de entrada da CLI (Interativo, Rerun, History e Argumentos)
-├── requirements.txt           # Dependências do projeto
-└── README.md                  # Documentação do projeto
+                    [ Entrada da Missão ]
+                    ( + Arquivo Opção -f )
+                              │
+                              ▼
+               ┌──────────────────────────────┐
+               │   Análise de Riscos & Input  │
+               │ (Truncamento & Path Traversal)│
+               └──────────────┬───────────────┘
+                              │
+                              ▼
+            ┌──────────────────────────────────┐
+            │     Conselho Consultivo AI       │
+            │ ──────────────────────────────── │
+            │  1. Architect (Score / Nota)     │
+            │  2. SecurityCoder (Score / VETO) │
+            │  3. Generalist (Score / Nota)    │
+            └─────────────────┬────────────────┘
+                              │
+                              ▼
+                ┌───────────────────────────┐
+                │  Cálculo do Veredito      │
+                │  & Persistência Dupla     │
+                └─────────────┬─────────────┘
+                              │
+          ┌───────────────────┴───────────────────┐
+          ▼                                       ▼
+ [ docs/DECISIONS.md ]              [ docs/decisions_history.json ]
+(Relatório Markdown Humano)             (Estrutura JSON / Reexecução)
 
-# 1. Clone o repositório
-git clone [https://github.com/seu-usuario/FounderAI.git](https://github.com/seu-usuario/FounderAI.git)
-cd FounderAI
 
-# 2. Crie e ative um ambiente virtual
-python -m venv .venv
-# No Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-# No Linux/Mac:
-source .venv/bin/activate
+---
 
-# 3. Instale as dependências
+## 🚀 Como Executar
+
+### 1. Pré-requisitos
+* **Python 3.10+**
+* **Ollama** instalado e configurado
+
+---
+
+### 2. Inicializando o Provedor Local (Ollama)
+
+Você pode executar o Ollama de duas formas equivalentes:
+
+**Via Docker Compose (Recomendado para ambientes containerizados):**
+```bash
+docker compose -f docker/docker-compose.yml up -d ollama
+Via Ollama Nativo (Instalado diretamente no Sistema Operacional):
+
+Bash
+ollama run gemma2:2b
+3. Instalação de Dependências
+Certifique-se de ativar seu ambiente virtual (.venv) no terminal do projeto e instale os pacotes necessários:
+
+Bash
 pip install -r requirements.txt
+💻 Interface de Linha de Comando (CLI)
+O FounderAI conta com uma interface rica e amigável desenvolvida em rich, garantindo respostas visuais claras, tabelas formatadas e spinners de progresso.
 
-# 4. Garanta que o modelo no Ollama esteja pronto
-ollama run llama3
-
-python main.py "Quero criar uma plataforma de gestão financeira voltada para MEIs no Brasil"
-python main.py "Avaliar viabilidade de refatorar a CLI" -f README.md
-python main.py --history
+🔹 Submeter uma nova missão
+Bash
+python main.py "Validar viabilidade de um super app de produtividade urbana"
+🔹 Submeter uma missão anexando um arquivo de contexto
+Bash
+python main.py "Validar arquitetura e segurança do projeto" -f README.md
+🔹 Consultar o histórico de deliberações
+Bash
+python main.py --history -n 5
+🔹 Reexecutar a última missão submetida
+Bash
 python main.py --last
-python main.py --rerun "ID_DA_DELIBERACAO"
-python main.py
+🔹 Reexecutar uma missão específica por ID
+Bash
+python main.py --rerun 37daafd5-e464-4c4a-aaf1-f2121dcec850
+🛡️ Auditoria e Persistência Dupla
+Todas as deliberações geradas pelo Conselho possuem rastreabilidade total e geram registros imutáveis gravados simultaneamente em dois formatos:
 
-📌 Status do Projeto
-[x] Sprint 1: Estrutura base do Conselho Consultivo, integração com Ollama local e persistência em Markdown.
+docs/DECISIONS.md — Histórico humano contendo ADRs (Architecture Decision Records) e relatórios detalhados em Markdown.
 
-[x] Sprint 2: Interface CLI avançada com rich, tratamento de resiliência/timeout e injeção de contexto via arquivos locais.
+docs/decisions_history.json — Base estruturada legível por máquina, garantindo reexecuções exatas (--rerun) e consultas via CLI (--history).
 
-[x] Sprint 3: Persistência estruturada em JSON, histórico de decisões (--history), limites inteligentes de contexto e reexecução de deliberações (--last / --rerun).
+📌 Histórico de Decisões de Arquitetura (ADRs)
+[ADR-001] Escolha de Execução Local Sequencial com Ollama e gemma2:2b.
 
-[ ] Sprint 4 (Em andamento): Polimento final do MVP, estabilização de UX/DX, documentação e congelamento da versão 2.0-MVP.
+[ADR-002] Congelamento Oficial do MVP v2.0 e Definição de Escopo de Manutenção (Agosto/2026).
+
+📋 Status da Release
+Versão: v2.0-MVP
+
+Status: APROVADO & CONGELADO
+
+Data de Encerramento: 27 de Agosto de 2026
