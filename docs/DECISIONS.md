@@ -681,3 +681,34 @@
 - **Generalist** — Score: 6.5/10 | ✅ APPROVE
   > A missão tem potencial para revolucionar o mercado de tecnologia no Brasil, mas precisa ser mais específica. O setor é promissor, com grande demanda por soluções inovadoras. A inteligência artificial (IA) oferece oportunidades significativas, mas a viabilidade depende da identificação de um nicho específico e da capacidade de solucionar problemas reais dos clientes brasileiros. É crucial entender o comportamento do consumidor brasileiro, o poder de compra e as barreiras burocráticas para gara...
 
+
+---
+
+## ADR-004: Padronização do Protocolo OpenAI-Compatible e Client Híbrido (v3.5 Fase 2)
+
+* **Data:** 19/09/2026
+* **Status:** Aprovado
+* **Autor:** Qwen (Dev Principal) / Gemini & Grok (Arquitetos)
+
+### Contexto
+Com a introdução da Arquitetura Híbrida (Fase 2), era necessário conectar o FounderAI a múltiplos provedores Cloud (Groq, OpenRouter, OpenAI) e locais (Ollama / LM Studio / vLLM) sem inflar dependências nem criar abstrações complexas. A suíte precisava ser determinística (zero I/O real em testes) e tipada estritamente (Pylance/mypy zero errors).
+
+### Decisão
+1. **Protocolo Único:** Adotar a especificação de API `OpenAI-compatible` como contrato universal para todos os clientes LLM. Todos os provedores (incluindo Ollama local via `/v1`) passam a falar `POST {base_url}/chat/completions`.
+2. **Resiliência:** Implementar fallback automático e transparente do provedor Cloud para o servidor Local em caso de falhas de conexão, ausência de chave API ou erro HTTP.
+3. **Configuração Unificada:** Gerenciamento via Pydantic V2 (`SettingsConfigDict`) permitindo override de provedor por papel (`Architect`, `SecurityCoder`, `ProductStrategist`).
+
+### Consequências Positivas
+- **Dependência reduzida:** apenas `httpx` (única lib HTTP), sem SDKs oficiais dos provedores;
+- **Testabilidade total:** `httpx.MockTransport` permite testar toda a cadeia Cloud → Local sem mock de função, sem I/O real e de forma determinística;
+- **Tipagem estrita:** `ProviderName = Literal["groq", "openrouter", "openai", "local"]` rejeita strings inválidas em tempo de desenvolvimento;
+- **Retrocompatibilidade Fase 1:** `call_ollama_json`, `LLMProviderError` e aliases `Ollama*Error` mantidos — 108 testes legados continuam verdes.
+
+### Consequências Negativas / Trade-offs
+- Provedores Cloud com recursos proprietários (tools, structured output) precisam ser adaptados manualmente caso venham a ser usados no futuro;
+- Fallback silencioso pode mascarar falhas persistentes de API (mitigado por logs via `rich.console` a cada transição).
+
+### Alternativas Rejeitadas
+- **SDKs oficiais por provedor** (`openai`, `groq`, `httpx`): descartado por multiplicar dependências e duplicar lógica de erro;
+- **Adapters por provedor (padrão Strategy):** descartado por complexidade prematura — o protocolo OpenAI-compatible já homogeneiza 100% dos casos atuais;
+- **Retry com backoff exponencial**: descartado nesta fase em favor do fallback imediato (mais alinhado à UX do jurado multi-agente).

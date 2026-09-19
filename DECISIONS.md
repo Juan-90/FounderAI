@@ -4,6 +4,28 @@
 
 ---
 
+
+---
+
+## ADR-003: Abertura do Ciclo v3.5 — Multi-turno e Arquitetura Híbrida
+
+* **Data:** 05/09/2026
+* **Status:** Aprovado
+
+### Contexto
+O ciclo da v3.0 core (Módulos C1 a C3 e Melhorias M1 a M4) foi encerrado com 100% de sucesso e estabilidade (53/53 testes unitários aprovados em ~0.3s). Para elevar a utilidade do FounderAI, o conselho deixa de ser um avaliador estático ("uma tacada só") para se tornar um consultor interativo.
+
+### Decisões
+1. **Priorização P0 (Multi-turno / Diálogo):** Introduzir fluxo interativo de até 1 rodada de esclarecimento antes do veredito final.
+2. **Priorização P1 (Arquitetura Híbrida):** Preparar suporte a provedores cloud (Groq/OpenRouter) com fallback local em fase posterior.
+3. **Gerenciamento de Estado:** Introdução do schema `DeliberationState` com suporte aos estados `PENDING_CLARIFICATION`, `FINAL` e `CANCELLED`.
+4. **Preservação de Regras:** A matriz de decisão da v3.0 (Média $\ge 7.5$, SecurityCoder $\ge 6.0$, sem vetos) e a validação estrita de inconsistência score/verdict mantêm-se inalteradas no Turno 1.
+
+### Fora do Escopo
+* Múltiplas rodadas infinitas de diálogo (limitado a 1 nesta fase).
+* RAG, Sandbox de execução de código, autonomia dos agentes e entrada por voz.
+
+
 ## 2026-06
 
 ### Arquitetura local-first

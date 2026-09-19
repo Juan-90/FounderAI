@@ -1,12 +1,12 @@
 """
-Fundador IA v2.0 — CLI Principal (Sprint 4 — MVP Congelado)
+Fundador IA v3.5 — CLI Principal
+Orquestra deliberação multi-turno (Turno 0 + Turno 1) com diálogo interativo.
 
 Uso:
     python main.py                              Menu interativo
     python main.py "Missão"                     Deliberação direta
     python main.py "Missão" -f README.md        Com arquivo de contexto
     python main.py --last                        Reexecutar última deliberação
-    python main.py --last -f outro.md           Reexecutar com novo contexto
     python main.py --rerun <ID>                 Reexecutar por ID
     python main.py --history                    Ver histórico
     python main.py --history -n 10              Últimas 10 deliberações
@@ -18,28 +18,28 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
+from typing import List
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.table import Table
-from rich.text import Text
 
 console = Console()
 
 
 # ─────────────────────────────────────────
-# Parser com help rico
+# Parser
 # ─────────────────────────────────────────
 
 class _RichHelpFormatter(argparse.HelpFormatter):
-    """HelpFormatter que adiciona cabeçalho visual ao --help."""
     def format_help(self) -> str:
         return (
-            "\n  🏛  Fundador IA v2.0 — Conselho Consultivo Artificial\n"
+            "\n  🏛  Fundador IA v3.5 — Conselho Consultivo Artificial\n"
             "  ─────────────────────────────────────────────────────\n\n"
             + super().format_help()
             + "\n  Exemplos:\n"
-            "    python main.py \"Criar um app de finanças para MEIs\"\n"
+            "    python main.py \"Criar app de finanças para MEIs\"\n"
             "    python main.py \"Missão\" -f README.md -f docs/PRD.md\n"
             "    python main.py --last\n"
             "    python main.py --rerun abc12345-...\n"
@@ -54,44 +54,27 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=_RichHelpFormatter,
         add_help=True,
     )
-    parser.add_argument(
-        "mission", nargs="?", default=None,
-        help="Texto da missão a ser avaliada pelo Conselho.",
-    )
-    parser.add_argument(
-        "-f", "--file",
-        action="append", dest="files", default=[], metavar="ARQUIVO",
-        help="Arquivo de contexto a anexar (repetível). Ex: -f README.md",
-    )
-    parser.add_argument(
-        "--history",
-        action="store_true",
-        help="Exibir histórico de deliberações anteriores.",
-    )
-    parser.add_argument(
-        "-n",
-        type=int, default=5, dest="history_limit", metavar="N",
-        help="Número de entradas no histórico (padrão: 5).",
-    )
-    parser.add_argument(
-        "--last",
-        action="store_true",
-        help="Reexecutar a última deliberação salva.",
-    )
-    parser.add_argument(
-        "--rerun", metavar="ID",
-        help="Reexecutar uma deliberação específica pelo ID.",
-    )
+    parser.add_argument("mission", nargs="?", default=None,
+                        help="Texto da missão a ser avaliada.")
+    parser.add_argument("-f", "--file", action="append", dest="files",
+                        default=[], metavar="ARQUIVO",
+                        help="Arquivo de contexto (repetível). Ex: -f README.md")
+    parser.add_argument("--history", action="store_true",
+                        help="Exibir histórico de deliberações anteriores.")
+    parser.add_argument("-n", type=int, default=5, dest="history_limit",
+                        metavar="N", help="Entradas no histórico (padrão: 5).")
+    parser.add_argument("--last", action="store_true",
+                        help="Reexecutar a última deliberação salva.")
+    parser.add_argument("--rerun", metavar="ID",
+                        help="Reexecutar uma deliberação específica pelo ID.")
     return parser
 
 
 def _parse_args() -> argparse.Namespace:
     parser = _build_parser()
     args = parser.parse_args()
-
     if not any([args.history, args.last, args.rerun, args.mission]):
         return _interactive_menu()
-
     return args
 
 
@@ -107,7 +90,7 @@ def _interactive_menu() -> argparse.Namespace:
     console.print()
     console.print(
         Panel(
-            "[bold cyan]Fundador IA v2.0[/bold cyan] — Conselho Consultivo Artificial\n\n"
+            "[bold cyan]Fundador IA v3.5[/bold cyan] — Conselho Consultivo Artificial\n\n"
             "  [bold][1][/bold]  Nova Missão\n"
             "  [bold][2][/bold]  Reexecutar Última Deliberação\n"
             "  [bold][3][/bold]  Ver Histórico de Decisões\n"
@@ -146,18 +129,11 @@ def _interactive_menu() -> argparse.Namespace:
 # ─────────────────────────────────────────
 
 def _exit_error(message: str, exception: Exception | None = None) -> None:
-    """Exibe erro amigável e encerra com código 1. Nunca expõe stack trace."""
     detail = str(exception) if exception else ""
     body = message + (f"\n\n[dim]{detail}[/dim]" if detail else "")
     console.print()
-    console.print(
-        Panel(
-            body,
-            title="[bold red]⚠  Erro[/bold red]",
-            border_style="red",
-            padding=(1, 2),
-        )
-    )
+    console.print(Panel(body, title="[bold red]⚠  Erro[/bold red]",
+                        border_style="red", padding=(1, 2)))
     sys.exit(1)
 
 
@@ -212,7 +188,6 @@ def _load_for_rerun(
             )
 
     assert entry is not None
-
     mission: str = entry["mission"]
     files: list[str] = override_files if override_files else (entry.get("context_files") or [])
 
@@ -222,8 +197,7 @@ def _load_for_rerun(
             f"[dim]ID original:[/dim] [bold]{entry['id']}[/bold]\n"
             f"[dim]Data:[/dim] {entry['timestamp']}",
             title="[bold cyan]🔄 Reexecutando Deliberação[/bold cyan]",
-            border_style="cyan",
-            padding=(0, 2),
+            border_style="cyan", padding=(0, 2),
         )
     )
     return mission, files
@@ -237,9 +211,9 @@ def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
     if not file_paths:
         return "", []
 
-    from backend.tools.file_tools import _PROJECT_ROOT, prepare_context_payload  # noqa: PLC0415
+    from backend.tools.file_tools import _PROJECT_ROOT, prepare_context_payload
 
-    project_root: Path = Path(_PROJECT_ROOT)  # type annotation explícita elimina Unbound
+    project_root: Path = Path(_PROJECT_ROOT)
 
     try:
         payload = prepare_context_payload(file_paths)
@@ -260,10 +234,8 @@ def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
 
     for f in payload.omitted_files:
         _print_warning(f"{Path(f).name} omitido — limite de contexto atingido.")
-
     for w in payload.warnings:
         _print_warning(w)
-
     if payload.included_files or payload.omitted_files:
         console.print()
 
@@ -283,24 +255,17 @@ def _show_history(limit: int) -> None:
 
     if not decisions:
         console.print()
-        console.print(
-            Panel(
-                "[dim]Nenhuma deliberação encontrada.\n"
-                "Execute [bold]python main.py \"sua missão\"[/bold] para começar.[/dim]",
-                title="[bold cyan]📋 Histórico de Deliberações[/bold cyan]",
-                border_style="cyan",
-                padding=(1, 2),
-            )
-        )
+        console.print(Panel(
+            "[dim]Nenhuma deliberação encontrada.\n"
+            "Execute [bold]python main.py \"sua missão\"[/bold] para começar.[/dim]",
+            title="[bold cyan]📋 Histórico de Deliberações[/bold cyan]",
+            border_style="cyan", padding=(1, 2),
+        ))
         return
 
-    table = Table(
-        title=f"Últimas {len(decisions)} Deliberações",
-        show_header=True,
-        header_style="bold cyan",
-        border_style="dim",
-        padding=(0, 1),
-    )
+    table = Table(title=f"Últimas {len(decisions)} Deliberações",
+                  show_header=True, header_style="bold cyan",
+                  border_style="dim", padding=(0, 1))
     table.add_column("Data/Hora", min_width=18, style="dim")
     table.add_column("ID", min_width=10, style="dim")
     table.add_column("Missão", min_width=34)
@@ -311,7 +276,7 @@ def _show_history(limit: int) -> None:
     for d in decisions:
         mission_short = d["mission"][:55] + ("…" if len(d["mission"]) > 55 else "")
         score = d["average_score"]
-        score_style = "green" if score >= 7.0 else "yellow" if score >= 5.0 else "red"
+        score_style = "green" if score >= 7.5 else "yellow" if score >= 6.0 else "red"
         verdict_str = (
             "[green]✅ APPROVED[/green]" if d["final_verdict"] == "APPROVED"
             else "[red]❌ REJECTED[/red]"
@@ -319,22 +284,17 @@ def _show_history(limit: int) -> None:
         files = d.get("context_files") or []
         files_str = ", ".join(Path(f).name for f in files) if files else "—"
         short_id = (d.get("id") or "")[:8] + "…"
-
-        table.add_row(
-            d["timestamp"], short_id, mission_short,
-            f"[{score_style}]{score:.2f}[/{score_style}]",
-            verdict_str, files_str,
-        )
+        table.add_row(d["timestamp"], short_id, mission_short,
+                      f"[{score_style}]{score:.2f}[/{score_style}]",
+                      verdict_str, files_str)
 
     console.print()
     console.print(table)
-    console.print(
-        "\n[dim]Dica: python main.py --rerun <ID completo> para reexecutar.[/dim]\n"
-    )
+    console.print("\n[dim]Dica: python main.py --rerun <ID completo> para reexecutar.[/dim]\n")
 
 
 # ─────────────────────────────────────────
-# Renderização da deliberação
+# Renderização
 # ─────────────────────────────────────────
 
 def _render_header(mission: str, included_files: list[str]) -> None:
@@ -343,35 +303,36 @@ def _render_header(mission: str, included_files: list[str]) -> None:
         if included_files else ""
     )
     console.print()
-    console.print(
-        Panel(
-            f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
-            f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{context_info}",
-            title="[bold cyan]🏛  Fundador IA v2.0[/bold cyan]",
-            border_style="cyan",
-            padding=(1, 2),
-        )
-    )
+    console.print(Panel(
+        f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
+        f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{context_info}",
+        title="[bold cyan]🏛  Fundador IA v3.5[/bold cyan]",
+        border_style="cyan", padding=(1, 2),
+    ))
     console.print()
 
 
-def _render_scores_table(decision) -> None:
-    table = Table(
-        title="Avaliações do Conselho",
-        show_header=True,
-        header_style="bold cyan",
-        border_style="dim",
-        padding=(0, 1),
+def _render_juror_row(r) -> None:
+    """Exibe resultado inline de um jurado durante o spinner."""
+    score_style = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
+    verdict_icon = "✅" if r.verdict.value == "APPROVE" else "🚫"
+    console.print(
+        f"  [bold]{r.juror_name}[/bold] — "
+        f"Score: [{score_style}]{r.score:.1f}/10[/{score_style}] "
+        f"{verdict_icon} {r.verdict.value}"
     )
+
+
+def _render_jurors_table(responses: list) -> None:
+    table = Table(show_header=True, header_style="bold cyan",
+                  border_style="dim", padding=(0, 1))
     table.add_column("Jurado", style="bold", min_width=16)
     table.add_column("Score", justify="center", min_width=8)
     table.add_column("Veredicto", justify="center", min_width=12)
     table.add_column("Raciocínio", min_width=44)
 
-    for r in decision.juror_responses:
-        score_style = (
-            "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
-        )
+    for r in responses:
+        score_style = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
         verdict_str = (
             "[green]✅ APPROVE[/green]" if r.verdict.value == "APPROVE"
             else "[red]🚫 VETO[/red]"
@@ -382,105 +343,220 @@ def _render_scores_table(decision) -> None:
             f"[{score_style}]{r.score:.1f}/10[/{score_style}]",
             verdict_str, reasoning_short,
         )
-
-    console.print()
     console.print(table)
 
 
-def _render_final_verdict(decision) -> None:
-    approved = decision.final_verdict == "APPROVED"
+def _render_final_verdict(final_state) -> None:
+    decision = final_state.final_decision
+    if not decision:
+        return
+    approved = decision.verdict == "APPROVED"
     reason_line = (
         f"\n[dim]Motivo: [/dim][italic]{decision.reason}[/italic]"
-        if getattr(decision, "reason", "") else ""
+        if decision.reason else ""
     )
     console.print()
-    console.print(
-        Panel(
-            f"{'✅' if approved else '❌'} Veredito Final: "
-            f"{'[bold green]APPROVED[/bold green]' if approved else '[bold red]REJECTED[/bold red]'}\n"
-            f"[dim]Score Médio: [/dim][bold]{decision.average_score:.2f}/10.0[/bold]"
-            f"{reason_line}",
-            title="[bold]🎯 Decisão do Conselho[/bold]",
-            border_style="green" if approved else "red",
-            padding=(1, 2),
-        )
-    )
+    console.print(Panel(
+        f"{'✅' if approved else '❌'} Veredito Final: "
+        f"{'[bold green]APPROVED[/bold green]' if approved else '[bold red]REJECTED[/bold red]'}\n"
+        f"[dim]Score Médio: [/dim][bold]{decision.average_score:.2f}/10.0[/bold]"
+        f"{reason_line}",
+        title="[bold]🎯 Decisão do Conselho[/bold]",
+        border_style="green" if approved else "red",
+        padding=(1, 2),
+    ))
+
+
+def _render_clarification(state) -> None:
+    """Exibe as perguntas do Turno 0 para o fundador."""
+    clarification = state.clarification
+    if not clarification:
+        return
+
+    questions_text = "\n".join(f"  • {q}" for q in clarification.questions)
+    console.print()
+    console.print(Panel(
+        f"[dim]Motivo:[/dim] {clarification.reason}\n\n"
+        f"[bold]Perguntas para você:[/bold]\n{questions_text}",
+        title="[bold yellow]❓ Esclarecimentos Necessários[/bold yellow]",
+        border_style="yellow", padding=(1, 2),
+    ))
 
 
 # ─────────────────────────────────────────
-# Deliberação com spinner
+# Coleta de respostas dos jurados (LLM)
 # ─────────────────────────────────────────
 
-async def _run_with_spinner(mission: str, context_block: str):
+async def _collect_juror_responses(
+    mission: str,
+    context_block: str,
+    turn_label: str,
+    extra_context: str = "",
+) -> list:
+    """
+    Executa os 3 jurados sequencialmente com spinner.
+    extra_context é injetado no prompt em deliberações de Turno 1.
+    """
     from backend.agents.council import JURORS, _evaluate_juror
     from backend.core.llm_client import LLMProviderError
-    from backend.schemas.council import CouncilDecision, JurorResponse, JurorVerdict
+    from backend.schemas.council import JurorResponse
+
+    full_context = context_block
+    if extra_context:
+        full_context = (
+            f"{context_block}\n\n"
+            f"--- CONTEXTO ADICIONAL (Resposta do Fundador) ---\n"
+            f"{extra_context}\n---"
+        )
 
     responses: list[JurorResponse] = []
 
     for juror in JURORS:
         with console.status(
-            f"[cyan]Consultando Jurado [{juror['name']}]...[/cyan]",
+            f"[cyan]{turn_label} — Consultando [{juror['name']}]...[/cyan]",
             spinner="dots",
         ):
             try:
-                response = await _evaluate_juror(juror, mission, context_block)
+                response = await _evaluate_juror(juror, mission, full_context)
             except LLMProviderError as e:
-                _exit_error(
-                    f"Falha ao consultar o Jurado [{juror['name']}].\n{e}",
-                )
+                _exit_error(f"Falha ao consultar [{juror['name']}].\n{e}")
             except RuntimeError as e:
                 _exit_error(str(e))
             except Exception as e:
-                _exit_error(
-                    f"Erro inesperado ao consultar [{juror['name']}].",
-                    exception=e,
-                )
+                _exit_error(f"Erro inesperado ao consultar [{juror['name']}].", exception=e)
 
         responses.append(response)
-        score_style = (
-            "green" if response.score >= 7.0 else
-            "yellow" if response.score >= 5.0 else "red"
-        )
-        verdict_icon = "✅" if response.verdict.value == "APPROVE" else "🚫"
-        console.print(
-            f"  [bold]{response.juror_name}[/bold] — "
-            f"Score: [{score_style}]{response.score:.1f}/10[/{score_style}] "
-            f"{verdict_icon} {response.verdict.value}"
-        )
+        _render_juror_row(response)
 
-    average_score = round(sum(r.score for r in responses) / len(responses), 2)
-    security = next((r for r in responses if r.juror_name == "SecurityCoder"), None)
-    security_vetoed = security is not None and security.verdict == JurorVerdict.VETO
-    security_ok = security is not None and security.score >= 5.0
-
-    final_verdict = (
-        "APPROVED"
-        if average_score >= 8.0 and not security_vetoed and security_ok
-        else "REJECTED"
-    )
-
-    return CouncilDecision(
-        mission=mission,
-        final_verdict=final_verdict,
-        average_score=average_score,
-        juror_responses=responses,
-    )
+    return responses
 
 
 # ─────────────────────────────────────────
-# Entry point com tratamento global
+# Fluxo de deliberação multi-turno
+# ─────────────────────────────────────────
+
+async def _run_deliberation(
+    mission: str,
+    context_block: str,
+    included_files: list[str],
+) -> None:
+    """
+    Orquestra o fluxo completo: Turno 0 → (opcional) Turno 1 → resultado.
+    Persiste a decisão final no histórico.
+    """
+    from backend.core.council import (
+        cancel_deliberation,
+        process_founder_reply,
+        process_turn0,
+    )
+    from backend.core.history import save_council_decision
+    from backend.schemas.council import CouncilDecision as SchemaCouncilDecision
+
+    # ── TURNO 0 — Análise Inicial ─────────────────────────────────────────────
+    console.print(Rule("[bold cyan][TURNO 0 — ANÁLISE INICIAL][/bold cyan]", style="cyan"))
+    console.print()
+
+    turn0_responses = await _collect_juror_responses(
+        mission, context_block, "[TURNO 0]"
+    )
+
+    state = process_turn0(mission, turn0_responses)
+
+    # ── Sem necessidade de esclarecimento → resultado direto ──────────────────
+    if state.status == "FINAL":
+        console.print()
+        console.print(Rule("[bold green][DELIBERAÇÃO CONCLUÍDA][/bold green]", style="green"))
+        _render_jurors_table(turn0_responses)
+        _render_final_verdict(state)
+        _persist_decision(state, included_files, save_council_decision)
+        return
+
+    # ── AGUARDANDO ESCLARECIMENTO ─────────────────────────────────────────────
+    console.print(Rule("[bold yellow][AGUARDANDO ESCLARECIMENTO][/bold yellow]", style="yellow"))
+    _render_clarification(state)
+
+    founder_reply = console.input(
+        "\n[bold yellow]📝 Sua resposta (ou /cancel para encerrar):[/bold yellow] "
+    ).strip()
+
+    if not founder_reply or founder_reply.lower() == "/cancel":
+        cancelled = cancel_deliberation(
+            state,
+            reason=founder_reply if founder_reply else "Fundador encerrou sem responder.",
+        )
+        console.print()
+        console.print(Panel(
+            "[dim]Deliberação encerrada pelo fundador.[/dim]",
+            title="[bold dim]🚫 Cancelado[/bold dim]",
+            border_style="dim", padding=(0, 2),
+        ))
+        _print_info(f"Motivo: {cancelled.founder_response}")
+        console.print()
+        sys.exit(0)
+
+    # ── TURNO 1 — Deliberação Final ───────────────────────────────────────────
+    console.print()
+    console.print(Rule("[bold cyan][TURNO 1 — DELIBERAÇÃO FINAL][/bold cyan]", style="cyan"))
+    console.print()
+
+    turn1_responses = await _collect_juror_responses(
+        mission, context_block,
+        turn_label="[TURNO 1]",
+        extra_context=founder_reply,
+    )
+
+    final_state = process_founder_reply(state, founder_reply, turn1_responses)
+
+    console.print()
+    console.print(Rule("[bold green][DELIBERAÇÃO CONCLUÍDA][/bold green]", style="green"))
+
+    # Exibe tabela consolidada do Turno 1
+    console.print()
+    console.print("[bold dim]Avaliações — Turno 1[/bold dim]")
+    _render_jurors_table(turn1_responses)
+    _render_final_verdict(final_state)
+    _persist_decision(final_state, included_files, save_council_decision)
+
+
+def _persist_decision(final_state, included_files: list[str], save_fn) -> None:
+    """Persiste a decisão final no histórico de forma segura."""
+    from backend.schemas.council import CouncilDecision as CouncilSchemaDecision
+
+    if not final_state.final_decision:
+        return
+
+    fd = final_state.final_decision
+
+    # Adapta CouncilDecision do schemas.py para o formato esperado pelo history
+    compatible = CouncilSchemaDecision(
+        verdict=fd.verdict,
+        average_score=fd.average_score,
+        reason=fd.reason,
+    )
+
+    console.print()
+    with console.status("[dim]Salvando decisão...[/dim]", spinner="dots"):
+        try:
+            deliberation_id = save_fn(compatible, included_files)
+        except Exception as e:
+            _print_warning(f"Falha ao salvar decisão: {e}")
+            return
+
+    _print_success(f"Decisão registrada — ID: {deliberation_id}")
+    console.print()
+
+
+# ─────────────────────────────────────────
+# Entry point
 # ─────────────────────────────────────────
 
 async def main() -> None:
     args = _parse_args()
 
-    # ── Histórico ──
     if args.history:
         _show_history(args.history_limit)
         sys.exit(0)
 
-    # ── Reexecução ──
     if args.last or args.rerun:
         mission, prev_files = _load_for_rerun(
             use_last=args.last,
@@ -494,34 +570,11 @@ async def main() -> None:
     if not mission:
         _exit_error("Missão não pode ser vazia.")
 
-    # ── Contexto ──
     context_block, included_files = _prepare_context(prev_files)
     _render_header(mission, included_files)
 
-    # ── Deliberação ──
-    decision = await _run_with_spinner(mission, context_block)
+    await _run_deliberation(mission, context_block, included_files)
 
-    _render_scores_table(decision)
-    _render_final_verdict(decision)
-
-    # ── Persistência ──
-    console.print()
-    with console.status("[dim]Salvando decisão...[/dim]", spinner="dots"):
-        try:
-            from backend.core.history import save_council_decision
-            deliberation_id = save_council_decision(decision, included_files)
-        except Exception as e:
-            _print_warning(f"Falha ao salvar decisão: {e}")
-            deliberation_id = "não salvo"
-
-    _print_success(f"Decisão registrada — ID: {deliberation_id}")
-    console.print()
-    sys.exit(0)
-
-
-# ─────────────────────────────────────────
-# Guarda de topo com tratamento global
-# ─────────────────────────────────────────
 
 if __name__ == "__main__":
     try:
@@ -530,16 +583,12 @@ if __name__ == "__main__":
         console.print("\n\n[dim]Interrompido pelo usuário.[/dim]\n")
         sys.exit(0)
     except SystemExit:
-        raise  # Deixa sys.exit() propagar normalmente
+        raise
     except Exception as e:
         console.print()
-        console.print(
-            Panel(
-                f"[bold]Erro inesperado:[/bold] {type(e).__name__}\n\n"
-                f"[dim]{e}[/dim]",
-                title="[bold red]⚠  Erro Crítico[/bold red]",
-                border_style="red",
-                padding=(1, 2),
-            )
-        )
+        console.print(Panel(
+            f"[bold]Erro inesperado:[/bold] {type(e).__name__}\n\n[dim]{e}[/dim]",
+            title="[bold red]⚠  Erro Crítico[/bold red]",
+            border_style="red", padding=(1, 2),
+        ))
         sys.exit(1)
