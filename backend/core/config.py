@@ -127,5 +127,58 @@ class Settings(BaseSettings):
         }
         return models[provider]
 
+        # ─────────────────────────────────────────────
+    # Fase 3 — Validação de configuração (Bloco 2)
+    # ─────────────────────────────────────────────
+    def validate_provider_config(self) -> list[str]:
+        """
+        Verifica consistência entre provedor primário e credenciais.
+
+        Returns:
+            Lista de mensagens de alerta (vazia = configuração OK).
+            Se o provedor Cloud primário estiver sem API key, o sistema
+            cairá automaticamente em `FALLBACK_PROVIDER` no runtime.
+        """
+        warnings: list[str] = []
+        primary = self.PRIMARY_PROVIDER
+        fallback = self.FALLBACK_PROVIDER
+
+        # Cloud sem chave → alertar que o fallback será usado
+        if primary in ("groq", "openrouter", "openai"):
+            key = self.api_key_for(primary)
+            if not key or not key.strip():
+                warnings.append(
+                    f"Provedor primário '{primary}' sem API key configurada "
+                    f"(defina {primary.upper()}_API_KEY no .env). "
+                    f"Sistema usará fallback automático para '{fallback}'."
+                )
+
+        # Fallback Cloud também sem chave → alerta crítico (sem rede de segurança)
+        if fallback in ("groq", "openrouter", "openai"):
+            key = self.api_key_for(fallback)
+            if not key or not key.strip():
+                warnings.append(
+                    f"Provedor de fallback '{fallback}' sem API key. "
+                    f"Em caso de falha do primário, não haverá rede de segurança."
+                )
+
+        # Overrides por papel com provedor Cloud inválido
+        role_map: dict[str, ProviderName | None] = {
+            "Architect": self.ARCHITECT_PROVIDER,
+            "SecurityCoder": self.SECURITYCODER_PROVIDER,
+            "ProductStrategist": self.PRODUCTSTRATEGIST_PROVIDER,
+        }
+        for role, provider in role_map.items():
+            if provider is None:
+                continue
+            if provider in ("groq", "openrouter", "openai"):
+                if not self.api_key_for(provider) or not self.api_key_for(provider).strip():
+                    warnings.append(
+                        f"Override de '{role}' aponta para '{provider}' "
+                        f"sem API key correspondente. Usará fallback."
+                    )
+
+        return warnings
+
 
 settings = Settings()

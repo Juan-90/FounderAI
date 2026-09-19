@@ -1,11 +1,13 @@
 """
-LLM Client — FounderAI v3.5 (Fase 2 — Arquitetura Híbrida).
+LLM Client — FounderAI v3.5 (Fase 2 + Fase 3 Bloco 2 — Observabilidade Híbrida).
 
 Wrapper assíncrono agnóstico a provedor:
   • Cloud: groq | openrouter | openai (APIs compatíveis com OpenAI);
   • Local: ollama / vLLM expostos via endpoint OpenAI-compatible;
   • Fallback automático Cloud → Local em qualquer falha de API;
   • Overrides por papel (Architect, SecurityCoder, ProductStrategist);
+  • Observabilidade (Bloco 2): `complete_verbose` retorna `LLMCallResult`
+    com provider_used / model_used / fallback_triggered / original_provider;
   • Tratamento defensivo global: nunca expõe stack trace (LLMProviderError).
 
 Retrocompatibilidade Fase 1:
@@ -15,6 +17,7 @@ Retrocompatibilidade Fase 1:
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -51,6 +54,26 @@ class LLMProviderError(Exception):
 OllamaUnavailableError   = LLMProviderError
 OllamaTimeoutError       = LLMProviderError
 OllamaInvalidResponseError = LLMProviderError
+
+
+# ─────────────────────────────────────────
+# Fase 3 (Bloco 2) — Resultado com metadados de observabilidade
+# ─────────────────────────────────────────
+
+@dataclass(frozen=True)
+class LLMCallResult:
+    """
+    Resultado de uma chamada ao LLM com metadados de observabilidade.
+
+    Captura o provedor/modelo efetivamente usados e se houve fallback,
+    permitindo rastreamento na CLI e persistência no histórico.
+    """
+    content: str
+    provider_used: ProviderName
+    model_used: str
+    fallback_triggered: bool = False
+    original_provider: ProviderName | None = None
+
 
 # ─────────────────────────────────────────
 # Schema JSON obrigatório (Fase 1)
@@ -198,7 +221,7 @@ async def call_ollama_json(
 
 
 # ─────────────────────────────────────────
-# Fase 2 — Cliente agnóstico a provedor
+# Fase 2/3 — Cliente agnóstico a provedor
 # ─────────────────────────────────────────
 
 class LLMClient:
@@ -256,13 +279,38 @@ class LLMClient:
         model: str | None = None,
         role: str | None = None,
     ) -> str:
-        """Texto bruto do modelo, com fallback automático entre provedores."""
+        """Texto bruto do modelo, com fallback automático (retrocompatível)."""
+        result = await self.complete_verbose(system_prompt, user_prompt, model, role)
+        return result.content
+
+    async def complete_verbose(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str | None = None,
+        role: str | None = None,
+    ) -> LLMCallResult:
+        """
+        Igual a `complete`, mas retorna `LLMCallResult` com metadados de
+        observabilidade (provedor/modelo usados e fallback disparado).
+        """
         chain = self._provider_chain(role)
+        original_provider: ProviderName = chain[0]
         last_error: LLMProviderError | None = None
 
         for index, provider in enumerate(chain):
             try:
-                return await self._call_provider(provider, system_prompt, user_prompt, model)
+                content, model_used = await self._call_provider_verbose(
+                    provider, system_prompt, user_prompt, model
+                )
+                triggered = provider != original_provider
+                return LLMCallResult(
+                    content=content,
+                    provider_used=provider,
+                    model_used=model_used,
+                    fallback_triggered=triggered,
+                    original_provider=original_provider if triggered else None,
+                )
             except LLMProviderError as exc:
                 last_error = exc
                 is_last = index == len(chain) - 1
@@ -311,13 +359,14 @@ class LLMClient:
             transport=self._transport,
         )
 
-    async def _call_provider(
+    async def _call_provider_verbose(
         self,
         provider: ProviderName,
         system_prompt: str,
         user_prompt: str,
         model: str | None,
-    ) -> str:
+    ) -> tuple[str, str]:
+        """Chama um provedor e retorna (conteúdo, modelo_efetivamente_usado)."""
         api_key = self._config.api_key_for(provider)
         if provider != "local" and not api_key:
             raise LLMProviderError(
@@ -331,8 +380,9 @@ class LLMClient:
         headers: dict[str, str] = {}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+        effective_model = model or self._config.default_model_for(provider)
         payload: dict[str, Any] = {
-            "model": model or self._config.default_model_for(provider),
+            "model": effective_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -344,7 +394,8 @@ class LLMClient:
             async with self._http_client() as client:
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
-                return self._extract_content(provider, response)
+                content = self._extract_content(provider, response)
+                return content, effective_model
         except LLMProviderError:
             raise
         except httpx.ConnectError:

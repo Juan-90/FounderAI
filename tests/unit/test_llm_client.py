@@ -1,15 +1,15 @@
 """
-Testes unitários do LLM Client (Fase 2 — Arquitetura Híbrida).
+Testes unitários do LLM Client (Fase 2 + Fase 3 Bloco 2 — Observabilidade).
 
-Correções de tipagem aplicadas (Pylance strict → 0 problemas):
-  1. Overrides de ambiente construídos como `dict[str, str]` e aplicados via
-     `monkeypatch.setenv(...)` (variável de env é sempre string) — elimina os
-     2 erros de `.update(dict[str, object])` (antiga Ln 49);
-  2. Instanciação de `Settings` exclusivamente com o Literal `ProviderName` e
-     `float` para `LLM_TIMEOUT_SECONDS` (factory `_make_settings`) — elimina
-     os 6 erros de `str` incompatível com `ProviderName` / `float` (Ln 50);
-  3. Rede simulada com `httpx.MockTransport` (determinístico, sem I/O real);
-  4. Testes sync envolvendo `asyncio.run` — sem dependência de plugin async.
+Cobre:
+  • Resolução de provedor e overrides por papel;
+  • Settings via env (dict[str, str] + monkeypatch.setenv);
+  • Fallback Cloud → Local, timeout, JSON inválido, ausência de API key;
+  • Observabilidade: LLMCallResult (provider_used/model_used/fallback_triggered);
+  • Validação de configuração: Settings.validate_provider_config();
+  • Retrocompatibilidade: aliases Ollama*Error e complete() retornando str.
+
+Rede simulada com httpx.MockTransport (determinístico, sem I/O real).
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from pydantic import ValidationError
 
 from backend.core.config import ProviderName, Settings
 from backend.core.llm_client import (
+    LLMCallResult,
     LLMClient,
     LLMErrorKind,
     LLMProviderError,
@@ -35,7 +36,7 @@ from backend.core.llm_client import (
 
 
 # ─────────────────────────────────────────────────────────────
-# Factories tipadas (correção dos erros de Ln 50)
+# Factories tipadas
 # ─────────────────────────────────────────────────────────────
 def _make_settings(
     primary: ProviderName = "groq",
@@ -88,7 +89,7 @@ def test_resolve_provider_padrao_e_override_por_papel() -> None:
 
 
 def test_settings_carrega_overrides_de_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Env vars são strings: dict[str, str] + monkeypatch.setenv (fix Ln 49)."""
+    """Env vars são strings: dict[str, str] + monkeypatch.setenv."""
     overrides: dict[str, str] = {
         "PRIMARY_PROVIDER": "openrouter",
         "FALLBACK_PROVIDER": "local",
@@ -260,3 +261,89 @@ def test_primary_local_nao_duplica_chamadas() -> None:
 
     _run(scenario())
     assert [r.url.host for r in recorded] == ["localhost"]
+
+
+# ─────────────────────────────────────────────────────────────
+# Fase 3 (Bloco 2) — Observabilidade via complete_verbose
+# ─────────────────────────────────────────────────────────────
+def test_complete_verbose_retorna_metadados_do_provedor() -> None:
+    """complete_verbose inclui provider_used, model_used e fallback_triggered=False."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _openai_response("hello founder")
+
+    async def scenario() -> None:
+        client = LLMClient(_make_settings(), transport=httpx.MockTransport(handler))
+        result = await client.complete_verbose("sys", "user")
+        assert isinstance(result, LLMCallResult)
+        assert result.content == "hello founder"
+        assert result.provider_used == "groq"
+        assert result.model_used == "llama-3.3-70b-versatile"
+        assert result.fallback_triggered is False
+        assert result.original_provider is None
+
+    _run(scenario())
+
+
+def test_complete_verbose_sinaliza_fallback_em_cadeia() -> None:
+    """Quando o primário falha: fallback_triggered=True e original_provider preenchido."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.groq.com":
+            return httpx.Response(500, json={"error": "boom"})
+        return _openai_response("local response")
+
+    async def scenario() -> None:
+        client = LLMClient(_make_settings(), transport=httpx.MockTransport(handler))
+        result = await client.complete_verbose("sys", "user")
+        assert isinstance(result, LLMCallResult)
+        assert result.provider_used == "local"
+        assert result.model_used == "gemma2:2b"
+        assert result.fallback_triggered is True
+        assert result.original_provider == "groq"
+
+    _run(scenario())
+
+
+def test_complete_retrocompativel_retorna_apenas_string() -> None:
+    """`complete` (sem _verbose) continua retornando str — suíte legada preservada."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _openai_response("texto bruto")
+
+    async def scenario() -> None:
+        client = LLMClient(_make_settings(), transport=httpx.MockTransport(handler))
+        text = await client.complete("sys", "user")
+        assert isinstance(text, str)
+        assert text == "texto bruto"
+
+    _run(scenario())
+
+
+# ─────────────────────────────────────────────────────────────
+# Fase 3 (Bloco 2) — Validação de configuração (Settings)
+# ─────────────────────────────────────────────────────────────
+def test_validate_provider_config_sem_chave_gera_warning() -> None:
+    """Cloud sem API key gera warning de fallback automático."""
+    cfg = _make_settings(primary="groq", groq_api_key="")
+    warnings = cfg.validate_provider_config()
+    assert len(warnings) >= 1
+    assert any("groq" in w and "fallback" in w for w in warnings)
+
+
+def test_validate_provider_config_local_sem_warning() -> None:
+    """Local como primário não exige API key — zero warnings."""
+    cfg = _make_settings(primary="local", groq_api_key="")
+    assert cfg.validate_provider_config() == []
+
+
+def test_validate_provider_config_override_sem_chave_gera_warning() -> None:
+    """Override por papel apontando para Cloud sem chave gera warning específico."""
+    cfg = Settings(
+        PRIMARY_PROVIDER="groq",
+        FALLBACK_PROVIDER="local",
+        LLM_TIMEOUT_SECONDS=5.0,
+        ARCHITECT_PROVIDER="openrouter",
+        GROQ_API_KEY="groq-key",
+        OPENROUTER_API_KEY="",
+        OPENAI_API_KEY="",
+    )
+    warnings = cfg.validate_provider_config()
+    assert any("Architect" in w and "openrouter" in w for w in warnings)
