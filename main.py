@@ -8,6 +8,10 @@ Fase 3 (Bloco 1) — Polimento UX:
   • Cancelamento gracioso: cancel / abort / /cancel / Ctrl+C → status CANCELLED;
   • Recapitulação do histórico de esclarecimento no veredito final.
 
+Fase 3 (Bloco 2) — Observabilidade & Config:
+  • Coluna "Provedor" na tabela de jurados (modelo + indicador de fallback);
+  • Avisos de configuração na inicialização (Cloud sem API key → fallback local).
+
 Uso:
     python main.py                              Menu interativo
     python main.py "Missão"                     Deliberação direta
@@ -233,7 +237,6 @@ def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
         _exit_error("Falha ao preparar contexto de arquivos.", e)
 
     console.print()
-    # Resumo estruturado da injeção de contexto (Fase 3 — 3.2)
     console.print(
         f"[dim]📁 Contexto:[/dim] {len(payload.included_files)} arquivo(s) incluído(s), "
         f"{len(payload.truncated_files)} truncado(s), "
@@ -308,7 +311,7 @@ def _show_history(limit: int) -> None:
 
     console.print()
     console.print(table)
-    console.print("\n[dim]Dica: python main.py --rerun <ID completo> para reexecutar.[/dim]\n")
+    console.print("\n[dim]Dica: python main.py --rerun ID_COMPLETO para reexecutar.[/dim]\n")
 
 
 # ─────────────────────────────────────────
@@ -330,6 +333,35 @@ def _render_header(mission: str, included_files: list[str]) -> None:
     console.print()
 
 
+def _render_config_warnings() -> None:
+    """Fase 3 (3.4): avisos de configuração na inicialização."""
+    from backend.core.config import settings as app_settings
+
+    warnings = app_settings.validate_provider_config()
+    if not warnings:
+        return
+    console.print()
+    console.print(Panel(
+        "\n".join(f"• {w}" for w in warnings),
+        title="[bold yellow]⚙  Avisos de Configuração[/bold yellow]",
+        border_style="yellow", padding=(1, 2),
+    ))
+
+
+def _observability_cell(r: JurorResponse) -> str:
+    """Fase 3 (3.3): célula 'Provedor' com modelo e indicador de fallback."""
+    if r.provider_used == "fallback-safe":
+        return "[red]fallback-safe[/red] (sem LLM)"
+    if r.model_used:
+        short_model = r.model_used.split(":")[0].split("/")[-1]
+        base = f"{r.provider_used} ({short_model})"
+    else:
+        base = r.provider_used
+    if r.fallback_triggered and r.original_provider:
+        return f"{base} [yellow]⟲ fallback de {r.original_provider}[/yellow]"
+    return base
+
+
 def _render_juror_row(r: JurorResponse) -> None:
     """Exibe resultado inline de um jurado durante o spinner."""
     score_style = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
@@ -337,7 +369,8 @@ def _render_juror_row(r: JurorResponse) -> None:
     console.print(
         f"  [bold]{r.juror_name}[/bold] — "
         f"Score: [{score_style}]{r.score:.1f}/10[/{score_style}] "
-        f"{verdict_icon} {r.verdict.value}"
+        f"{verdict_icon} {r.verdict.value} "
+        f"[dim][{_observability_cell(r)}][/dim]"
     )
 
 
@@ -347,6 +380,7 @@ def _render_jurors_table(responses: list[JurorResponse]) -> None:
     table.add_column("Jurado", style="bold", min_width=16)
     table.add_column("Score", justify="center", min_width=8)
     table.add_column("Veredicto", justify="center", min_width=12)
+    table.add_column("Provedor", min_width=26)
     table.add_column("Raciocínio", min_width=44)
 
     for r in responses:
@@ -359,7 +393,9 @@ def _render_jurors_table(responses: list[JurorResponse]) -> None:
         table.add_row(
             r.juror_name,
             f"[{score_style}]{r.score:.1f}/10[/{score_style}]",
-            verdict_str, reasoning_short,
+            verdict_str,
+            _observability_cell(r),
+            reasoning_short,
         )
     console.print(table)
 
@@ -390,7 +426,6 @@ def _render_final_verdict(final_state: DeliberationState) -> None:
     if not decision:
         return
 
-    # Recapitulação do esclarecimento (Fase 3 — 3.2), antes do veredito
     _render_clarification_recap(final_state)
 
     approved = decision.verdict == "APPROVED"
@@ -519,7 +554,6 @@ async def _run_deliberation(
     console.print(Rule("[bold yellow][AGUARDANDO ESCLARECIMENTO][/bold yellow]", style="yellow"))
     _render_clarification(state)
 
-    # Cancelamento gracioso: tokens + Ctrl+C (Fase 3 — 3.2)
     cancelled_by_keyboard = False
     try:
         founder_reply = console.input(
@@ -565,7 +599,6 @@ async def _run_deliberation(
     console.print()
     console.print(Rule("[bold green][DELIBERAÇÃO CONCLUÍDA][/bold green]", style="green"))
 
-    # Exibe tabela consolidada do Turno 1
     console.print()
     console.print("[bold dim]Avaliações — Turno 1[/bold dim]")
     _render_jurors_table(turn1_responses)
@@ -581,9 +614,8 @@ def _persist_decision(
     """
     Persiste a decisão final no histórico de forma segura.
 
-    FIX (Fase 3): o history espera o shape LEGADO de backend.schemas.council
-    (mission / final_verdict / average_score / juror_responses), usado pelo
-    _show_history. Adaptamos a partir do CouncilDecision core v3.0.
+    O history espera o shape de backend.schemas.council
+    (mission / final_verdict / average_score / juror_responses).
     """
     from backend.schemas.council import CouncilDecision as CouncilSchemaDecision
 
@@ -592,7 +624,6 @@ def _persist_decision(
 
     fd = final_state.final_decision
 
-    # Adapta CouncilDecision (core v3.0) → formato esperado pelo history (legado)
     compatible = CouncilSchemaDecision(
         mission=final_state.mission,
         final_verdict=fd.verdict,
@@ -636,6 +667,9 @@ async def main() -> None:
 
     if not mission:
         _exit_error("Missão não pode ser vazia.")
+
+    # Fase 3 (3.4): avisos de configuração antes de qualquer chamada LLM
+    _render_config_warnings()
 
     context_block, included_files = _prepare_context(prev_files)
     _render_header(mission, included_files)

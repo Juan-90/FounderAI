@@ -2,12 +2,13 @@
 Schemas Pydantic v2 do Conselho Consultivo Artificial.
 v3.0 / Módulo C1: Validação de consistência score↔verdict via model_validator.
 v3.0 / Módulo C3: CouncilDecision com campo `reason` para observabilidade.
+v3.5 / Fase 3 Bloco 2: JurorResponse com metadados de observabilidade híbrida.
 """
 
 from __future__ import annotations
 
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -24,6 +25,9 @@ class JurorResponse(BaseModel):
     Regras de consistência (Módulo C1):
       - VETO   + score >= 7.0  → inválido (jurado contraditório)
       - APPROVE + score <  5.0  → inválido (aprovação sem convicção)
+
+    Observabilidade (Fase 3 Bloco 2): campos opcionais com default,
+    retrocompatíveis com construções legadas (138 testes preservados).
     """
 
     juror_name: str = Field(
@@ -39,6 +43,24 @@ class JurorResponse(BaseModel):
     reasoning: str = Field(
         max_length=500,
         description="Justificativa do veredicto em até 500 caracteres",
+    )
+
+    # ── Observabilidade híbrida (Fase 3 Bloco 2) ──
+    provider_used: str = Field(
+        default="local",
+        description="Provedor que efetivamente respondeu (groq/openrouter/openai/local/fallback-safe)",
+    )
+    model_used: str = Field(
+        default="",
+        description="Modelo efetivamente utilizado na chamada",
+    )
+    fallback_triggered: bool = Field(
+        default=False,
+        description="True se houve fallback de provedor durante a chamada",
+    )
+    original_provider: Optional[str] = Field(
+        default=None,
+        description="Provedor original tentado, quando fallback_triggered == True",
     )
 
     @model_validator(mode="after")

@@ -1,6 +1,8 @@
 """
 History — Persistência de deliberações do Conselho Consultivo.
 Sprint 4: Append seguro que preserva cabeçalho e ADR-002 no DECISIONS.md.
+v3.5 / Fase 3 Bloco 2: persistência dos metadados de observabilidade
+(provedor/modelo/fallback por jurado) em JSON e Markdown.
 
 Localização: backend/core/history.py
 """
@@ -12,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend.schemas.council import CouncilDecision
+from backend.schemas.council import CouncilDecision, JurorResponse
 
 # ─────────────────────────────────────────
 # Caminhos
@@ -29,6 +31,23 @@ _ANCHOR: str = "<!-- ANCHOR_DELIBERATIONS -->"
 
 def _ensure_docs_dir() -> None:
     _DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ─────────────────────────────────────────
+# Observabilidade (Fase 3 Bloco 2)
+# ─────────────────────────────────────────
+
+def _observability_suffix(r: JurorResponse) -> str:
+    """Sufixo textual de provedor/modelo/fallback para Markdown."""
+    if r.provider_used == "fallback-safe":
+        return " | Provedor: fallback-safe (sem resposta de LLM)"
+    model = f" ({r.model_used})" if r.model_used else ""
+    fallback = (
+        f" [fallback de {r.original_provider}]"
+        if r.fallback_triggered and r.original_provider
+        else ""
+    )
+    return f" | Provedor: {r.provider_used}{model}{fallback}"
 
 
 # ─────────────────────────────────────────
@@ -85,7 +104,7 @@ def _build_md_block(
         lines += [f"**Arquivos de Contexto:** {files_str}", ""]
 
     lines += [
-        f"**Veredicto Final:** {verdict_emoji} {decision.final_verdict}",
+        f"**Veredito Final:** {verdict_emoji} {decision.final_verdict}",
         "",
         f"**Score Médio:** {decision.average_score:.2f}/10.0",
         "",
@@ -98,6 +117,7 @@ def _build_md_block(
         lines.append(
             f"- **{r.juror_name}** — Score: {r.score:.1f}/10 | "
             f"{verdict_icon} {r.verdict.value}"
+            f"{_observability_suffix(r)}"
         )
         lines.append(f"  > {r.reasoning}")
         lines.append("")
@@ -161,6 +181,11 @@ def _append_json(
                 "score": r.score,
                 "verdict": r.verdict.value,
                 "reasoning": r.reasoning,
+                # Observabilidade (Fase 3 Bloco 2)
+                "provider_used": r.provider_used,
+                "model_used": r.model_used,
+                "fallback_triggered": r.fallback_triggered,
+                "original_provider": r.original_provider,
             }
             for r in decision.juror_responses
         ],
