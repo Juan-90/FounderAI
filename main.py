@@ -2,6 +2,12 @@
 Fundador IA v3.5 — CLI Principal
 Orquestra deliberação multi-turno (Turno 0 + Turno 1) com diálogo interativo.
 
+Fase 3 (Bloco 1) — Polimento UX:
+  • Resumo de contexto estruturado (incluídos/truncados/omitidos);
+  • Painel de esclarecimento do Turno 0 com tokens de cancelamento explícitos;
+  • Cancelamento gracioso: cancel / abort / /cancel / Ctrl+C → status CANCELLED;
+  • Recapitulação do histórico de esclarecimento no veredito final.
+
 Uso:
     python main.py                              Menu interativo
     python main.py "Missão"                     Deliberação direta
@@ -18,14 +24,20 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import List
+from typing import Callable
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
+from backend.core.schemas import DeliberationState
+from backend.schemas.council import JurorResponse
+
 console = Console()
+
+# Tokens aceitos para cancelamento gracioso da deliberação (Fase 3 — 3.2)
+_CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 
 
 # ─────────────────────────────────────────
@@ -204,7 +216,7 @@ def _load_for_rerun(
 
 
 # ─────────────────────────────────────────
-# Contexto com resumo em KB
+# Contexto com resumo (Fase 3 — 3.2)
 # ─────────────────────────────────────────
 
 def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
@@ -221,6 +233,12 @@ def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
         _exit_error("Falha ao preparar contexto de arquivos.", e)
 
     console.print()
+    # Resumo estruturado da injeção de contexto (Fase 3 — 3.2)
+    console.print(
+        f"[dim]📁 Contexto:[/dim] {len(payload.included_files)} arquivo(s) incluído(s), "
+        f"{len(payload.truncated_files)} truncado(s), "
+        f"{len(payload.omitted_files)} omitido(s)"
+    )
     if payload.included_files:
         console.print("[dim]📁 Contexto Anexado:[/dim]")
         for f in payload.included_files:
@@ -312,7 +330,7 @@ def _render_header(mission: str, included_files: list[str]) -> None:
     console.print()
 
 
-def _render_juror_row(r) -> None:
+def _render_juror_row(r: JurorResponse) -> None:
     """Exibe resultado inline de um jurado durante o spinner."""
     score_style = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
     verdict_icon = "✅" if r.verdict.value == "APPROVE" else "🚫"
@@ -323,7 +341,7 @@ def _render_juror_row(r) -> None:
     )
 
 
-def _render_jurors_table(responses: list) -> None:
+def _render_jurors_table(responses: list[JurorResponse]) -> None:
     table = Table(show_header=True, header_style="bold cyan",
                   border_style="dim", padding=(0, 1))
     table.add_column("Jurado", style="bold", min_width=16)
@@ -346,10 +364,35 @@ def _render_jurors_table(responses: list) -> None:
     console.print(table)
 
 
-def _render_final_verdict(final_state) -> None:
+def _render_clarification_recap(state: DeliberationState) -> None:
+    """
+    Fase 3 (3.2): no resumo final, explicita que houve Turno 0 de esclarecimento,
+    exibindo as perguntas do conselho e a resposta do fundador (resumida).
+    """
+    if not state.clarification or not state.founder_response:
+        return
+
+    questions = "\n".join(f"  ❓ {q}" for q in state.clarification.questions)
+    answer = state.founder_response
+    answer_short = answer if len(answer) <= 300 else answer[:297] + "..."
+
+    console.print()
+    console.print(Panel(
+        f"[bold]Perguntas do Turno 0:[/bold]\n{questions}\n\n"
+        f"[bold]Resposta do fundador (resumida):[/bold]\n[italic]{answer_short}[/italic]",
+        title="[bold yellow]💬 Histórico de Esclarecimento[/bold yellow]",
+        border_style="yellow", padding=(1, 2),
+    ))
+
+
+def _render_final_verdict(final_state: DeliberationState) -> None:
     decision = final_state.final_decision
     if not decision:
         return
+
+    # Recapitulação do esclarecimento (Fase 3 — 3.2), antes do veredito
+    _render_clarification_recap(final_state)
+
     approved = decision.verdict == "APPROVED"
     reason_line = (
         f"\n[dim]Motivo: [/dim][italic]{decision.reason}[/italic]"
@@ -367,17 +410,20 @@ def _render_final_verdict(final_state) -> None:
     ))
 
 
-def _render_clarification(state) -> None:
-    """Exibe as perguntas do Turno 0 para o fundador."""
+def _render_clarification(state: DeliberationState) -> None:
+    """Exibe as perguntas do Turno 0 para o fundador (painel Rich numerado)."""
     clarification = state.clarification
     if not clarification:
         return
 
-    questions_text = "\n".join(f"  • {q}" for q in clarification.questions)
+    questions_text = "\n".join(
+        f"  [bold]{i}.[/bold] {q}" for i, q in enumerate(clarification.questions, 1)
+    )
     console.print()
     console.print(Panel(
         f"[dim]Motivo:[/dim] {clarification.reason}\n\n"
-        f"[bold]Perguntas para você:[/bold]\n{questions_text}",
+        f"[bold]Perguntas para você:[/bold]\n{questions_text}\n\n"
+        f"[dim]Digite 'cancel', 'abort' ou '/cancel' para encerrar a deliberação.[/dim]",
         title="[bold yellow]❓ Esclarecimentos Necessários[/bold yellow]",
         border_style="yellow", padding=(1, 2),
     ))
@@ -392,14 +438,13 @@ async def _collect_juror_responses(
     context_block: str,
     turn_label: str,
     extra_context: str = "",
-) -> list:
+) -> list[JurorResponse]:
     """
     Executa os 3 jurados sequencialmente com spinner.
     extra_context é injetado no prompt em deliberações de Turno 1.
     """
     from backend.agents.council import JURORS, _evaluate_juror
     from backend.core.llm_client import LLMProviderError
-    from backend.schemas.council import JurorResponse
 
     full_context = context_block
     if extra_context:
@@ -450,7 +495,6 @@ async def _run_deliberation(
         process_turn0,
     )
     from backend.core.history import save_council_decision
-    from backend.schemas.council import CouncilDecision as SchemaCouncilDecision
 
     # ── TURNO 0 — Análise Inicial ─────────────────────────────────────────────
     console.print(Rule("[bold cyan][TURNO 0 — ANÁLISE INICIAL][/bold cyan]", style="cyan"))
@@ -475,15 +519,25 @@ async def _run_deliberation(
     console.print(Rule("[bold yellow][AGUARDANDO ESCLARECIMENTO][/bold yellow]", style="yellow"))
     _render_clarification(state)
 
-    founder_reply = console.input(
-        "\n[bold yellow]📝 Sua resposta (ou /cancel para encerrar):[/bold yellow] "
-    ).strip()
+    # Cancelamento gracioso: tokens + Ctrl+C (Fase 3 — 3.2)
+    cancelled_by_keyboard = False
+    try:
+        founder_reply = console.input(
+            "\n[bold yellow]📝 Sua resposta (ou /cancel para encerrar):[/bold yellow] "
+        ).strip()
+    except KeyboardInterrupt:
+        cancelled_by_keyboard = True
+        founder_reply = ""
+        console.print()
+        _print_info("Ctrl+C detectado — encerrando deliberação...")
 
-    if not founder_reply or founder_reply.lower() == "/cancel":
-        cancelled = cancel_deliberation(
-            state,
-            reason=founder_reply if founder_reply else "Fundador encerrou sem responder.",
+    if cancelled_by_keyboard or not founder_reply or founder_reply.lower() in _CANCEL_TOKENS:
+        reason = (
+            "Fundador pressionou Ctrl+C."
+            if cancelled_by_keyboard
+            else (founder_reply if founder_reply else "Fundador encerrou sem responder.")
         )
+        cancelled = cancel_deliberation(state, reason=reason)
         console.print()
         console.print(Panel(
             "[dim]Deliberação encerrada pelo fundador.[/dim]",
@@ -491,6 +545,7 @@ async def _run_deliberation(
             border_style="dim", padding=(0, 2),
         ))
         _print_info(f"Motivo: {cancelled.founder_response}")
+        _print_info(f"Status: {cancelled.status}")
         console.print()
         sys.exit(0)
 
@@ -518,8 +573,18 @@ async def _run_deliberation(
     _persist_decision(final_state, included_files, save_council_decision)
 
 
-def _persist_decision(final_state, included_files: list[str], save_fn) -> None:
-    """Persiste a decisão final no histórico de forma segura."""
+def _persist_decision(
+    final_state: DeliberationState,
+    included_files: list[str],
+    save_fn: Callable[..., str],
+) -> None:
+    """
+    Persiste a decisão final no histórico de forma segura.
+
+    FIX (Fase 3): o history espera o shape LEGADO de backend.schemas.council
+    (mission / final_verdict / average_score / juror_responses), usado pelo
+    _show_history. Adaptamos a partir do CouncilDecision core v3.0.
+    """
     from backend.schemas.council import CouncilDecision as CouncilSchemaDecision
 
     if not final_state.final_decision:
@@ -527,11 +592,13 @@ def _persist_decision(final_state, included_files: list[str], save_fn) -> None:
 
     fd = final_state.final_decision
 
-    # Adapta CouncilDecision do schemas.py para o formato esperado pelo history
+    # Adapta CouncilDecision (core v3.0) → formato esperado pelo history (legado)
     compatible = CouncilSchemaDecision(
-        verdict=fd.verdict,
+        mission=final_state.mission,
+        final_verdict=fd.verdict,
         average_score=fd.average_score,
         reason=fd.reason,
+        juror_responses=final_state.turn1_responses or final_state.turn0_responses,
     )
 
     console.print()

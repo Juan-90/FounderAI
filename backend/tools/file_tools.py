@@ -1,6 +1,8 @@
 """
 File Tools — Utilitários seguros para leitura de arquivos do projeto.
+
 Sprint 3: Limites configuráveis de contexto e prepare_context_payload.
+Fase 3: Delegação para `backend.core.context` (retrocompatibilidade).
 """
 
 from __future__ import annotations
@@ -8,12 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# ─────────────────────────────────────────
-# Constantes configuráveis
-# ─────────────────────────────────────────
+from backend.core.config import settings
 
-MAX_FILE_CHARS: int = 10_000       # Máximo de caracteres por arquivo
-MAX_TOTAL_CONTEXT_CHARS: int = 30_000  # Máximo total de contexto injetado
+# ─────────────────────────────────────────────────────────────
+# Constantes configuráveis (retrocompatibilidade Sprint 3)
+# ─────────────────────────────────────────────────────────────
+
+MAX_FILE_CHARS: int = settings.MAX_FILE_CHARS
+MAX_TOTAL_CONTEXT_CHARS: int = settings.MAX_TOTAL_CONTEXT_CHARS
 
 # Pastas ignoradas na listagem
 _IGNORED_DIRS: frozenset[str] = frozenset({
@@ -26,13 +30,18 @@ _IGNORED_DIRS: frozenset[str] = frozenset({
 _PROJECT_ROOT: Path = Path(__file__).parent.parent.parent.resolve()
 
 
-# ─────────────────────────────────────────
-# Resultado estruturado do prepare
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# Resultado estruturado do prepare (dataclass legado)
+# ─────────────────────────────────────────────────────────────
 
 @dataclass
 class ContextPayload:
-    """Resultado de prepare_context_payload."""
+    """
+    Resultado de prepare_context_payload (dataclass legado Sprint 3).
+
+    **Preferência:** use `backend.core.schemas.ContextPayload` (Pydantic V2).
+    Esta classe existe apenas para retrocompatibilidade com testes da Fase 1.
+    """
     block: str                          # Bloco de texto pronto para injeção no prompt
     included_files: list[str]           # Arquivos efetivamente incluídos
     truncated_files: list[str]          # Arquivos truncados por MAX_FILE_CHARS
@@ -40,9 +49,9 @@ class ContextPayload:
     warnings: list[str] = field(default_factory=list)  # Mensagens de aviso
 
 
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # Segurança
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 
 def _is_safe_path(file_path: str) -> tuple[bool, Path]:
     """
@@ -56,9 +65,9 @@ def _is_safe_path(file_path: str) -> tuple[bool, Path]:
         return False, Path()
 
 
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # Leitura individual
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 
 def read_project_file(file_path: str, max_chars: int = MAX_FILE_CHARS) -> str:
     """
@@ -87,9 +96,9 @@ def read_project_file(file_path: str, max_chars: int = MAX_FILE_CHARS) -> str:
     return content
 
 
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # Listagem do projeto
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 
 def list_project_files(
     base_path: str = ".",
@@ -117,9 +126,9 @@ def list_project_files(
     return result
 
 
-# ─────────────────────────────────────────
-# Payload de contexto com limites
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# Payload de contexto com limites (delega para backend.core.context)
+# ─────────────────────────────────────────────────────────────
 
 def prepare_context_payload(
     file_paths: list[str],
@@ -129,100 +138,39 @@ def prepare_context_payload(
     """
     Prepara o bloco de contexto para injeção nos prompts dos jurados.
 
+    **Delega para** `backend.core.context.prepare_context_payload` e converte
+    o resultado Pydantic V2 para o dataclass legado (retrocompatibilidade).
+
     Para cada arquivo:
     - Lê até max_file_chars (truncando se necessário).
     - Acumula o total. Se ultrapassar max_total_chars, omite os arquivos seguintes.
 
     Returns:
-        ContextPayload com bloco formatado, listas de incluídos/truncados/omitidos e avisos.
+        ContextPayload (dataclass) com bloco formatado, listas de
+        incluídos/truncados/omitidos e avisos.
     """
-    included: list[str] = []
-    truncated: list[str] = []
-    omitted: list[str] = []
-    warnings: list[str] = []
-    blocks: list[str] = ["--- CONTEXTO DO PROJETO (Arquivos Anexados) ---"]
-    total_chars: int = 0
-    limit_reached: bool = False
+    from backend.core.context import prepare_context_payload as _prepare  # noqa: PLC0415
 
-    for file_path in file_paths:
-        if limit_reached:
-            omitted.append(file_path)
-            continue
+    # Chama a versão Pydantic V2
+    result = _prepare(
+        file_paths,
+        max_file_chars=max_file_chars,
+        max_total_chars=max_total_chars,
+    )
 
-        is_safe, resolved = _is_safe_path(file_path)
-
-        # Arquivo inválido ou fora do projeto
-        if not is_safe or not resolved.exists():
-            warnings.append(f"Ignorado: '{file_path}' — não encontrado ou fora do projeto.")
-            omitted.append(file_path)
-            continue
-
-        try:
-            raw_content = resolved.read_text(encoding="utf-8", errors="replace")
-        except (PermissionError, OSError) as e:
-            warnings.append(f"Ignorado: '{file_path}' — erro de leitura: {e}")
-            omitted.append(file_path)
-            continue
-
-        was_truncated = len(raw_content) > max_file_chars
-        content = (
-            raw_content[:max_file_chars] + "\n[Conteúdo truncado por limite de tamanho]"
-            if was_truncated
-            else raw_content
-        )
-
-        # Verifica se ainda cabe no total
-        if total_chars + len(content) > max_total_chars:
-            # Tenta incluir o quanto cabe
-            remaining = max_total_chars - total_chars
-            if remaining > 200:  # Vale incluir parcialmente
-                content = (
-                    content[:remaining]
-                    + "\n[Conteúdo omitido: limite total de contexto atingido]"
-                )
-                truncated.append(file_path)
-                included.append(file_path)
-                total_chars = max_total_chars
-            else:
-                omitted.append(file_path)
-
-            limit_reached = True
-            if remaining > 200:
-                blocks.append(f"\n[{Path(file_path).name}]:\n{content}\n---")
-            warnings.append(
-                f"Limite total de {max_total_chars:,} caracteres atingido. "
-                f"{len(file_paths) - len(included) - len(omitted)} arquivo(s) omitido(s)."
-            )
-            continue
-
-        total_chars += len(content)
-        included.append(file_path)
-        if was_truncated:
-            truncated.append(file_path)
-            warnings.append(
-                f"'{Path(file_path).name}' truncado em {max_file_chars:,} caracteres."
-            )
-
-        blocks.append(f"\n[{Path(file_path).name}]:\n{content}\n---")
-
-    if omitted and not limit_reached:
-        # Omitidos por erro, não por limite
-        pass
-
-    block = "\n".join(blocks) if len(blocks) > 1 else ""
-
+    # Converte para o dataclass legado (retrocompatibilidade com 121 testes)
     return ContextPayload(
-        block=block,
-        included_files=included,
-        truncated_files=truncated,
-        omitted_files=omitted,
-        warnings=warnings,
+        block=result.formatted_content,
+        included_files=result.included,
+        truncated_files=result.truncated,
+        omitted_files=result.omitted,
+        warnings=result.warnings,
     )
 
 
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # Retrocompatibilidade (Sprint 2)
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 
 def build_context_block(file_paths: list[str], max_chars_per_file: int = MAX_FILE_CHARS) -> str:
     """Wrapper de retrocompatibilidade. Prefer prepare_context_payload."""

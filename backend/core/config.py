@@ -1,11 +1,11 @@
 """
-Configurações centrais do FounderAI v3.5 (Fase 2 — Arquitetura Híbrida).
+Configurações centrais do FounderAI v3.5 (Fase 2 + Fase 3).
 
 Carrega variáveis do `.env` via pydantic-settings (Pydantic V2) e expõe:
-  • Provedores LLM tipados (`ProviderName`) com fallback Cloud → Local;
-  • Overrides opcionais por papel (Architect, SecurityCoder, ProductStrategist);
-  • Campos legados da Fase 1 (Ollama, PostgreSQL, Qdrant, App) intactos,
-    garantindo retrocompatibilidade com a suíte de 108 testes.
+  • Provedores LLM tipados (`ProviderName`) com fallback Cloud → Local (Fase 2);
+  • Overrides opcionais por papel (Architect, SecurityCoder, etc.) (Fase 2);
+  • Limites de contexto para `prepare_context_payload` (Fase 3);
+  • Campos legados da Fase 1 (Ollama, PostgreSQL, Qdrant, App) intactos.
 """
 
 from __future__ import annotations
@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+
+    # ─────────────────────────────────────────────
+    # Fase 3 — Limites de Contexto
+    # ─────────────────────────────────────────────
+    MAX_FILE_CHARS: int = 15000
+    MAX_TOTAL_CONTEXT_CHARS: int = 40000
 
     # ─────────────────────────────────────────────
     # Legado Fase 1 — Ollama local (retrocompatibilidade)

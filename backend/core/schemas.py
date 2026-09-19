@@ -219,3 +219,71 @@ class MissionState(BaseModel):
     mission_score:  Optional[MissionScore]  = None
     final_decision: Optional[MissionDecision] = None
     error:          Optional[str]           = None
+
+
+# ═════════════════════════════════════════════════════════════
+# FASE 3 — Contexto Expandido (Bloco 1)
+# Anexo aditivo: nenhuma definição acima foi modificada.
+# ═════════════════════════════════════════════════════════════
+
+class ContextPayload(BaseModel):
+    """
+    Resultado de `backend.core.context.prepare_context_payload`.
+
+    Evolução tipada (Pydantic V2) do payload de contexto da Sprint 3,
+    com aliases de retrocompatibilidade para o dataclass legado de
+    `backend.tools.file_tools`.
+    """
+    included: list[str] = Field(
+        default_factory=list,
+        description="Lista de caminhos dos arquivos incluídos com sucesso",
+    )
+    truncated: list[str] = Field(
+        default_factory=list,
+        description="Arquivos que tiveram o conteúdo truncado por atingir o limite",
+    )
+    omitted: list[str] = Field(
+        default_factory=list,
+        description="Arquivos omitidos por estouro do limite total",
+    )
+    formatted_content: str = Field(
+        default="",
+        description="Conteúdo final formatado para o prompt",
+    )
+    total_chars: int = Field(
+        default=0,
+        description="Total de caracteres processados",
+    )
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Alertas e avisos durante o processamento",
+    )
+
+    # ── Aliases de retrocompatibilidade (dataclass Sprint 3) ──
+    @property
+    def block(self) -> str:
+        """Compat com `payload.block` (legado)."""
+        return self.formatted_content
+
+    @property
+    def included_files(self) -> list[str]:
+        """Compat com `payload.included_files` (legado)."""
+        return self.included
+
+    @property
+    def truncated_files(self) -> list[str]:
+        """Compat com `payload.truncated_files` (legado)."""
+        return self.truncated
+
+    @property
+    def omitted_files(self) -> list[str]:
+        """Compat com `payload.omitted_files` (legado)."""
+        return self.omitted
+
+    def summary(self) -> str:
+        """Resumo human-readable para a CLI (ex.: '3 incluído(s), 1 truncado(s), 0 omitido(s)')."""
+        return (
+            f"{len(self.included)} incluído(s), "
+            f"{len(self.truncated)} truncado(s), "
+            f"{len(self.omitted)} omitido(s)"
+        )
