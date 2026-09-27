@@ -203,3 +203,37 @@ O FounderAI foi idealizado como um sistema operacional/runtime configurável par
 **Motivo:** Ambiente de desenvolvimento usa CPU (GPU integrada AMD 5700U sem suporte ROCm via Docker no Windows). O Qwen3 14B requer GPU dedicada para ser viável. Gemma 4 E4B demonstrou qualidade suficiente no Sprint 1.
 **Impacto:** Nenhum na arquitetura — a troca é feita via variável MODEL_REASONING no .env. Quando houver acesso a hardware adequado, basta alterar a configuração.
 **Status:** Confirmada para desenvolvimento local
+
+
+---
+
+## ADR-007 — Congelamento Oficial da v4.0 (Execução Segura & Loop TDD)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO & CONGELADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+### Contexto
+Após o fechamento da v3.5, a v4.0 foi desenhada para transformar o FounderAI em uma plataforma de execução técnica controlada, permitindo rodar e validar código sem colocar em risco o ambiente host.
+
+### Escopo Entregue
+1. **Fase A (Sandbox Isolada):**
+   - Containers Docker efêmeros com hardening completo (`--network=none`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--pids-limit=64`, limits de CPU/Memória).
+   - Interface `SandboxRunner` com `command: list[str]`, truncamento de logs (`max_output_bytes`) e semântica estrita de `SandboxOutput`.
+   - Build local da imagem `founderai-sandbox-python:v1` (Python 3.11 + Pytest + `sandboxuser`).
+2. **Fase B (Agente de QA & Loop TDD Autônomo):**
+   - Schemas Pydantic V2 estritos (`TDDRequest`, `TDDAttempt`, `TDDResult`).
+   - `QAAgent` para geração de testes, análise de falhas e geração de patches.
+   - `TDDLoop` (Self-Healing) com freio estrito de máximo 3 tentativas de correção e escalação explícita (`escalated=True`).
+3. **Infraestrutura de Testes:**
+   - 162/162 testes passing (100% de sucesso).
+   - Marcador `@pytest.mark.real_llm` adicionado para execução controlada em CI/CD.
+
+### Critério de Sucesso Atingido
+> Código com erro → Geração de testes → Execução em container Docker → Detecção de falha → Correção autônoma → Teste passando na sandbox (ou escalação em 3 tentativas).
+
+### Explicitamente Fora de Escopo
+- RAG / Memória vetorial (adiado para v4.5/v5.0)
+- Persistência automática de patches no Git / Abertura de PRs
+- Execução de código com acesso à rede
+- Autonomia sem limites de retries

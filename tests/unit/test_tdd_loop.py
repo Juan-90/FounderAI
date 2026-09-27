@@ -248,6 +248,7 @@ def test_baseline_sucesso_real_na_sandbox(docker_runner: DockerSandboxRunner) ->
     assert len(result.attempts) == 1
 
 
+@pytest.mark.real_llm
 def test_self_healing_real_na_sandbox(docker_runner: DockerSandboxRunner) -> None:
     """Código quebrado → QAAgent real + Sandbox real → sucesso em ≤ 3 retries."""
     loop = TDDLoop(runner=docker_runner)  # QAAgent real (LLMClient híbrido)
@@ -257,10 +258,7 @@ def test_self_healing_real_na_sandbox(docker_runner: DockerSandboxRunner) -> Non
         goal="soma deve retornar a adição de a e b",
         max_retries=3,
     )
-    try:
-        result = asyncio.run(loop.run(request))
-    except (LLMProviderError, QAAgentError, RuntimeError) as exc:
-        pytest.skip(f"LLM indisponível/instável para self-healing real: {exc}")
+    result = asyncio.run(loop.run(request))
 
     assert result.escalated is False
     assert result.success is True
