@@ -1,23 +1,10 @@
-# 🏛 FounderAI v4.0 — Conselho Consultivo Artificial + Execução Segura
+# FounderAI 🚀
 
-Sistema de consultoria interativa **multi-agente e multi-turno** para fundadores de
-startups, agora com **execução técnica controlada**: um conselho de jurados de IA
-(Architect, SecurityCoder, Generalist) avalia sua missão, faz perguntas de
-esclarecimento quando necessário, emite veredito final com score e justificativa —
-e pode **rodar e autocorrigir código** em sandbox isolada sem risco ao host.
-
-## ✨ O que a v3.5 entrega (mantido na v4.0)
-
-| Capacidade | Descrição |
-|---|---|
-| **Diálogo Multi-turno** | Turno 0 (análise inicial) e Turno 1 (após esclarecimentos), com controle estrito de estado: `PENDING_CLARIFICATION`, `FINAL`, `CANCELLED`. |
-| **Cliente Híbrido (Cloud + Local)** | Contrato único `OpenAI-compatible` para Groq, OpenRouter, OpenAI e Ollama/vLLM local, com **fallback automático** Cloud → Local em falhas, timeout ou ausência de chave. |
-| **Contexto Expandido** | Múltiplos arquivos via `-f`, com limites previsíveis por arquivo (`MAX_FILE_CHARS`) e acumulados (`MAX_TOTAL_CONTEXT_CHARS`), relatados como incluídos/truncados/omitidos. |
-| **Observabilidade** | Provedor/modelo efetivos e indicador de fallback por jurado, exibidos na CLI e persistidos no histórico (JSON + Markdown). |
-| **Override por Papel** | Provedor específico por jurado (`ARCHITECT_PROVIDER`, `SECURITYCODER_PROVIDER`, `PRODUCTSTRATEGIST_PROVIDER`). |
+O **FounderAI** é uma ferramenta de apoio à validação de ideias de startups e software. Ele utiliza um conselho de agentes LLM especializados (*Architect*, *SecurityCoder* e *Generalist*) para analisar propostas, identificar riscos técnicos/negócios e emitir um parecer deliberativo transparente.
 
 ## 🛡️ O que a v4.0 adiciona
 
+<<<<<<< HEAD
 | Capacidade | Descrição |
 |---|---|
 | **Sandbox Isolada (Fase A)** | Containers Docker efêmeros e hardenizados (`--rm --network=none --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=64 --memory=512m --cpus=1.0`) para executar código sem risco ao host. |
@@ -191,3 +178,57 @@ tests/conftest.py           Marker real_llm + flag --run-real-llm
 - Persistência automática de patches no Git / abertura de PRs
 - Execução de código com acesso à rede
 - Autonomia sem limites de retries
+=======
+## 📌 Novidades da Versão 3.0 (Sprint 4)
+
+A versão 3.0 recalibrou os critérios do conselho para eliminar falsos-positivos de veto identificados em modelos menores (`2b`), promovendo deliberações mais equilibradas sem perder o rigor técnico:
+
+* **Módulo C1 — Isolamento de System Prompts:** Prompts de cada jurado agora vivem em arquivos externos versionados com mecanismo de *fallback* resiliente a erros de I/O e encoding.
+* **Módulo C2 — Parsing & Auto-Correção:** Validação estrita entre nota (*score*) e veredito (*verdict*), com disparos automáticos de *retry* técnico antes de acionar respostas *fallback*.
+* **Módulo C3 — Matriz de Decisão Centralizada:** Lógica de deliberação unificada com limiares ajustados:
+  * **Aprovado:** Média geral $\ge 7.5$, sem vetos e nota do *SecurityCoder* $\ge 6.0$.
+  * **Rejeitado:** Presença de VETO, nota do *SecurityCoder* $< 6.0$ ou média $< 7.5$.
+* **Observabilidade Clara:** Motivos detalhados da recusa/aprovação expostos diretamente no resultado da deliberação.
+* **Alta Cobertura de Testes:** Bateria de testes de regressão executada em $<0.5s$ para garantir consistência operacional.
+
+---
+
+## 🛠️ Arquitetura do Conselho
+
+| Agente | Foco Principal | LimiarCrítico |
+| :--- | :--- | :--- |
+| **Architect** | Escalabilidade, acoplamento e viabilidade técnica | Avalia arquitetura e padrão de projeto |
+| **SecurityCoder** | Vulnerabilidades, exposição de dados e boas práticas | Reprovado se nota $< 6.0$ ou VETO |
+| **Generalist** | Modelo de negócios, produto e aderência ao mercado | Avalia viabilidade geral da proposta |
+
+---
+
+## 🚀 Como Rodar o Projeto
+
+### Pré-requisitos
+* Python 3.12+
+* Ambiente virtual (`.venv`) ativado
+
+### Instalação
+```bash
+# Clone o repositório
+git clone [https://github.com/seu-usuario/FounderAI.git](https://github.com/seu-usuario/FounderAI.git)
+cd FounderAI
+
+# Crie e ative o ambiente virtual
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
+
+# Instale as dependências
+pip install -r requirements.txt
+
+
+# Executando os Testes
+Para rodar a suíte completa de testes unitários e de regressão (v3.0):
+
+Bash
+pytest tests/unit/ -v --asyncio-mode=auto
+📝 Documentação
+Para entender as motivações técnicas por trás dos limiares da v3.0 e a evolução dos prompts, consulte docs/DECISIONS.md
+>>>>>>> ff224362c462b99701ed6faacf47afceaa1ab351
