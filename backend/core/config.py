@@ -1,10 +1,11 @@
 """
-Configurações centrais do FounderAI v3.5 (Fase 2 + Fase 3).
+Configurações centrais do FounderAI (v3.5 + v4.0 Fase A).
 
 Carrega variáveis do `.env` via pydantic-settings (Pydantic V2) e expõe:
   • Provedores LLM tipados (`ProviderName`) com fallback Cloud → Local (Fase 2);
   • Overrides opcionais por papel (Architect, SecurityCoder, etc.) (Fase 2);
   • Limites de contexto para `prepare_context_payload` (Fase 3);
+  • Sandbox isolada Docker (v4.0 Fase A);
   • Campos legados da Fase 1 (Ollama, PostgreSQL, Qdrant, App) intactos.
 """
 
@@ -48,6 +49,14 @@ class Settings(BaseSettings):
     # ─────────────────────────────────────────────
     MAX_FILE_CHARS: int = 15000
     MAX_TOTAL_CONTEXT_CHARS: int = 40000
+
+    # ─────────────────────────────────────────────
+    # v4.0 Fase A — Sandbox Isolada (Docker efêmero)
+    # ─────────────────────────────────────────────
+    SANDBOX_ENABLED: bool = True
+    SANDBOX_IMAGE: str = "founderai-sandbox-python:v1"
+    SANDBOX_TIMEOUT_SECONDS: int = 20
+    SANDBOX_MAX_OUTPUT_BYTES: int = 1048576
 
     # ─────────────────────────────────────────────
     # Legado Fase 1 — Ollama local (retrocompatibilidade)
@@ -127,7 +136,7 @@ class Settings(BaseSettings):
         }
         return models[provider]
 
-        # ─────────────────────────────────────────────
+    # ─────────────────────────────────────────────
     # Fase 3 — Validação de configuração (Bloco 2)
     # ─────────────────────────────────────────────
     def validate_provider_config(self) -> list[str]:
@@ -136,14 +145,11 @@ class Settings(BaseSettings):
 
         Returns:
             Lista de mensagens de alerta (vazia = configuração OK).
-            Se o provedor Cloud primário estiver sem API key, o sistema
-            cairá automaticamente em `FALLBACK_PROVIDER` no runtime.
         """
         warnings: list[str] = []
         primary = self.PRIMARY_PROVIDER
         fallback = self.FALLBACK_PROVIDER
 
-        # Cloud sem chave → alertar que o fallback será usado
         if primary in ("groq", "openrouter", "openai"):
             key = self.api_key_for(primary)
             if not key or not key.strip():
@@ -153,7 +159,6 @@ class Settings(BaseSettings):
                     f"Sistema usará fallback automático para '{fallback}'."
                 )
 
-        # Fallback Cloud também sem chave → alerta crítico (sem rede de segurança)
         if fallback in ("groq", "openrouter", "openai"):
             key = self.api_key_for(fallback)
             if not key or not key.strip():
@@ -162,7 +167,6 @@ class Settings(BaseSettings):
                     f"Em caso de falha do primário, não haverá rede de segurança."
                 )
 
-        # Overrides por papel com provedor Cloud inválido
         role_map: dict[str, ProviderName | None] = {
             "Architect": self.ARCHITECT_PROVIDER,
             "SecurityCoder": self.SECURITYCODER_PROVIDER,
@@ -172,7 +176,8 @@ class Settings(BaseSettings):
             if provider is None:
                 continue
             if provider in ("groq", "openrouter", "openai"):
-                if not self.api_key_for(provider) or not self.api_key_for(provider).strip():
+                role_key = self.api_key_for(provider)
+                if not role_key or not role_key.strip():
                     warnings.append(
                         f"Override de '{role}' aponta para '{provider}' "
                         f"sem API key correspondente. Usará fallback."
