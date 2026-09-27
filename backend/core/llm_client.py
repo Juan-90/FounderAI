@@ -376,7 +376,9 @@ class LLMClient:
             )
 
         base = self._config.base_url_for(provider).rstrip("/")
-        url = f"{base}/chat/completions"
+        if base.endswith("/v1"):
+            base = base[:-3]
+        url = f"{base}/api/chat" if provider == "local" else f"{base}/chat/completions"
         headers: dict[str, str] = {}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -389,6 +391,9 @@ class LLMClient:
             ],
             "temperature": 0.2,
         }
+        # Ollama retorna streaming por padrão em /api/chat — forçar não-streaming
+        if provider == "local":
+            payload["stream"] = False
 
         try:
             async with self._http_client() as client:
@@ -423,10 +428,32 @@ class LLMClient:
             ) from None
 
     def _extract_content(self, provider: ProviderName, response: httpx.Response) -> str:
+        """
+        Extrai o conteúdo da resposta LLM.
+
+        Aceita ambos os formatos (defensivo por design):
+          • OpenAI-compatible: {"choices": [{"message": {"content": ...}}]}
+          • Ollama nativo:     {"message": {"content": ...}}
+        Isso mantém compatibilidade com mocks (que usam OpenAI-format)
+        e com o Ollama real via /api/chat (que usa formato nativo).
+        """
         try:
             data: dict[str, Any] = response.json()
-            content: str = data["choices"][0]["message"]["content"]
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            if "choices" in data and data["choices"]:
+                content: str = data["choices"][0]["message"]["content"]
+            elif "message" in data:
+                content = data["message"]["content"]
+            else:
+                raise LLMProviderError(
+                    f"Resposta sem 'choices' ou 'message' do provedor '{provider}'.",
+                    kind=LLMErrorKind.INVALID_JSON,
+                )
+        except json.JSONDecodeError as exc:
+            raise LLMProviderError(
+                f"Resposta não-JSON do provedor '{provider}'.",
+                kind=LLMErrorKind.INVALID_JSON,
+            ) from exc
+        except (KeyError, IndexError, TypeError) as exc:
             raise LLMProviderError(
                 f"Resposta malformada do provedor '{provider}'.",
                 kind=LLMErrorKind.INVALID_JSON,
