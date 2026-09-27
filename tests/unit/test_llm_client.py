@@ -152,7 +152,7 @@ def test_complete_json_sucesso_no_provedor_primario() -> None:
     assert recorded[0].url.host == "api.groq.com"
     assert recorded[0].headers["authorization"] == "Bearer groq-test-key"
     body: dict[str, Any] = json.loads(recorded[0].content)
-    assert body["model"] == "llama-3.3-70b-versatile"
+    assert body["model"] == "openai/gpt-oss-20b"
 
 
 def test_complete_retorna_texto_bruto() -> None:
@@ -277,7 +277,7 @@ def test_complete_verbose_retorna_metadados_do_provedor() -> None:
         assert isinstance(result, LLMCallResult)
         assert result.content == "hello founder"
         assert result.provider_used == "groq"
-        assert result.model_used == "llama-3.3-70b-versatile"
+        assert result.model_used == "openai/gpt-oss-20b"
         assert result.fallback_triggered is False
         assert result.original_provider is None
 

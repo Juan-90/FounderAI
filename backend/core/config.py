@@ -1,9 +1,10 @@
 """
-Configurações centrais do FounderAI (v3.5 + v4.0 Fase A).
+Configurações centrais do FounderAI (v4.0 final).
 
 Carrega variáveis do `.env` via pydantic-settings (Pydantic V2) e expõe:
   • Provedores LLM tipados (`ProviderName`) com fallback Cloud → Local (Fase 2);
   • Overrides opcionais por papel (Architect, SecurityCoder, etc.) (Fase 2);
+  • Modelos customizáveis por provedor (`GROQ_MODEL`, `OPENROUTER_MODEL`, etc.);
   • Limites de contexto para `prepare_context_payload` (Fase 3);
   • Sandbox isolada Docker (v4.0 Fase A);
   • Campos legados da Fase 1 (Ollama, PostgreSQL, Qdrant, App) intactos.
@@ -43,6 +44,15 @@ class Settings(BaseSettings):
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+
+    # ─────────────────────────────────────────────
+    # Modelos customizáveis por provedor (v4.0 fix)
+    # Permitindo override via .env sem quebrar a validação Pydantic V2.
+    # Padrões alinhados com modelos ativos e responsivos em 2026.
+    # ─────────────────────────────────────────────
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
+    OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-4o-mini"
 
     # ─────────────────────────────────────────────
     # Fase 3 — Limites de Contexto
@@ -127,11 +137,16 @@ class Settings(BaseSettings):
         return keys[provider]
 
     def default_model_for(self, provider: ProviderName) -> str:
-        """Modelo padrão por provedor."""
+        """
+        Modelo padrão por provedor.
+
+        Respeita os campos customizáveis (GROQ_MODEL, etc.) quando definidos,
+        caindo no modelo padrão do Ollama para `local`.
+        """
         models: dict[ProviderName, str] = {
-            "groq": "llama-3.3-70b-versatile",
-            "openrouter": "openai/gpt-4o-mini",
-            "openai": "gpt-4o-mini",
+            "groq": self.GROQ_MODEL,
+            "openrouter": self.OPENROUTER_MODEL,
+            "openai": self.OPENAI_MODEL,
             "local": self.council_model,
         }
         return models[provider]

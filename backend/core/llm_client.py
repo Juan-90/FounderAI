@@ -1,13 +1,15 @@
 """
-LLM Client — FounderAI v3.5 (Fase 2 + Fase 3 Bloco 2 — Observabilidade Híbrida).
+LLM Client — FounderAI v4.0 final.
 
 Wrapper assíncrono agnóstico a provedor:
   • Cloud: groq | openrouter | openai (APIs compatíveis com OpenAI);
   • Local: ollama / vLLM expostos via endpoint OpenAI-compatible;
   • Fallback automático Cloud → Local em qualquer falha de API;
   • Overrides por papel (Architect, SecurityCoder, ProductStrategist);
-  • Observabilidade (Bloco 2): `complete_verbose` retorna `LLMCallResult`
-    com provider_used / model_used / fallback_triggered / original_provider;
+  • Modelos customizáveis por provedor (GROQ_MODEL, etc.);
+  • Observabilidade: `complete_verbose` retorna `LLMCallResult`;
+  • Parse de JSON robusto com sanitização + reparo de JSON truncado (v4.0);
+  • max_tokens=2048 em Cloud para evitar truncamento em respostas longas;
   • Tratamento defensivo global: nunca expõe stack trace (LLMProviderError).
 
 Retrocompatibilidade Fase 1:
@@ -17,6 +19,7 @@ Retrocompatibilidade Fase 1:
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -27,6 +30,10 @@ from rich.console import Console
 from backend.core.config import ProviderName, Settings, settings
 
 console = Console(stderr=True)
+
+# Limite de tokens de saída para provedores Cloud. Suficiente para geração
+# de suítes de teste e patches no TDDLoop sem ser cortado pelo provider.
+_CLOUD_MAX_TOKENS: int = 2048
 
 # ─────────────────────────────────────────
 # Exceções
@@ -95,12 +102,17 @@ Valores válidos para verdict: "APPROVE" ou "VETO"
 # Helpers internos
 # ─────────────────────────────────────────
 
+# Regex para extrair o primeiro objeto JSON de um texto misto (último recurso)
+_JSON_OBJECT_RE = re.compile(r"\{(?:[^{}]|\{[^{}]*\})*\}", re.DOTALL)
+
+
 def _resolve_url() -> str:
     base = settings.ollama_base_url.rstrip("/").removesuffix("/v1")
     return f"{base}/api/generate"
 
 
 def _clean_json(raw: str) -> str:
+    """Remove fences ```json ... ``` (legado)."""
     raw = raw.strip()
     if raw.startswith("```"):
         raw = "\n".join(
@@ -108,6 +120,105 @@ def _clean_json(raw: str) -> str:
             if not line.strip().startswith("```")
         ).strip()
     return raw
+
+
+def _sanitize_json_for_parse(raw: str) -> str:
+    """
+    Sanitização agressiva de respostas de LLM antes do json.loads.
+
+    Tolerâncias implementadas (v4.0):
+      1. BOM UTF-8;
+      2. Fences de markdown na abertura e no fechamento;
+      3. Blocos aninhados de aspas triplas (duplas ou simples), que modelos
+         pequenos costumam injetar em valores de string — removidos antes do parse;
+      4. Comentários de linha no início de linhas (hash Python e barras JS);
+      5. Texto espúrio antes/depois do JSON — extração do primeiro objeto via regex.
+    """
+    text = raw
+
+    # 1. BOM
+    if text.startswith("\ufeff"):
+        text = text[1:]
+
+    # 2. Fences markdown (abertura e fechamento)
+    text = re.sub(r"^\s*```(?:json|JSON)?\s*\n?", "", text)
+    text = re.sub(r"\n?\s*```\s*$", "", text)
+
+    # 3. Blocos de aspas triplas aninhados (duplas ou simples)
+    text = re.sub(r'"""[\s\S]*?"""', "", text)
+    text = re.sub(r"'''[\s\S]*?'''", "", text)
+
+    # 4. Comentários de linha no início de linhas
+    text = re.sub(r"^\s*#.*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*//.*$", "", text, flags=re.MULTILINE)
+
+    text = text.strip()
+
+    # 5. Se ainda não começa com '{' ou '[', extrai o primeiro objeto JSON
+    if text and not text.startswith(("{", "[")):
+        match = _JSON_OBJECT_RE.search(text)
+        if match:
+            text = match.group(0)
+
+    return text
+
+
+def _try_repair_truncated_json(raw: str) -> str | None:
+    """
+    Tenta reparar um JSON truncado (cortado no meio por max_tokens).
+
+    Algoritmo (state machine):
+      - Percorre char a char rastreando se está dentro de uma string
+        (respeitando escapes \\");
+      - Mantém pilha de '{' e '[' abertos;
+      - Ao final, fecha a string aberta (se houver) e adiciona os
+        fechadores na ordem inversa da pilha;
+      - Retorna o JSON reparado APENAS se ele passar em json.loads;
+        caso contrário retorna None.
+
+    Usado como último recurso antes de lançar LLMProviderError(INVALID_JSON).
+    """
+    if not raw or not raw.lstrip().startswith(("{", "[")):
+        return None
+
+    in_string = False
+    escape = False
+    stack: list[str] = []
+
+    for char in raw:
+        if escape:
+            escape = False
+            continue
+        if in_string:
+            if char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char in "{[":
+            stack.append(char)
+        elif char == "}":
+            if stack and stack[-1] == "{":
+                stack.pop()
+        elif char == "]":
+            if stack and stack[-1] == "[":
+                stack.pop()
+
+    # Construir o reparo
+    repair = raw
+    if in_string:
+        repair += '"'
+    for opener in reversed(stack):
+        repair += "}" if opener == "{" else "]"
+
+    try:
+        json.loads(repair)
+        return repair
+    except json.JSONDecodeError:
+        return None
 
 
 async def _stream(url: str, payload: dict[str, Any], timeout: float) -> str:
@@ -334,16 +445,29 @@ class LLMClient:
         model: str | None = None,
         role: str | None = None,
     ) -> dict[str, Any]:
-        """Texto do modelo parseado como JSON (com limpeza de markdown)."""
+        """
+        Texto do modelo parseado como JSON.
+
+        Robusto (v4.0): aplica sanitização agressiva, e em caso de falha
+        tenta REPARO de JSON truncado (_try_repair_truncated_json) —
+        fecha strings/chaves/colchetes abertos para resgatar respostas
+        cortadas por max_tokens em provedores Cloud.
+        """
         raw = await self.complete(system_prompt, user_prompt, model, role)
-        cleaned = _clean_json(raw)
+        cleaned = _sanitize_json_for_parse(_clean_json(raw))
         try:
             parsed: dict[str, Any] = json.loads(cleaned)
         except json.JSONDecodeError:
-            raise LLMProviderError(
-                f"Modelo não retornou JSON válido.\nConteúdo recebido: {cleaned[:200]}",
-                kind=LLMErrorKind.INVALID_JSON,
-            ) from None
+            # Resgate: tenta reparar JSON truncado (v4.0)
+            repaired = _try_repair_truncated_json(cleaned)
+            if repaired is not None:
+                parsed = json.loads(repaired)
+            else:
+                raise LLMProviderError(
+                    f"Modelo não retornou JSON válido (nem após reparo).\n"
+                    f"Conteúdo recebido: {cleaned[:200]}",
+                    kind=LLMErrorKind.INVALID_JSON,
+                ) from None
         if not isinstance(parsed, dict):
             raise LLMProviderError(
                 f"JSON retornado não é um objeto: {cleaned[:200]}",
@@ -376,9 +500,13 @@ class LLMClient:
             )
 
         base = self._config.base_url_for(provider).rstrip("/")
-        if base.endswith("/v1"):
-            base = base[:-3]
-        url = f"{base}/api/chat" if provider == "local" else f"{base}/chat/completions"
+        if provider == "local":
+            if base.endswith("/v1"):
+                base = base[:-3]
+            url = f"{base}/api/chat"
+        else:
+            url = f"{base}/chat/completions"
+
         headers: dict[str, str] = {}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -391,7 +519,11 @@ class LLMClient:
             ],
             "temperature": 0.2,
         }
-        # Ollama retorna streaming por padrão em /api/chat — forçar não-streaming
+        # Evita truncamento por max_tokens em provedores Cloud.
+        # Ollama não tem limite baixo default e usa sintaxe diferente
+        # (options.num_predict), então aplicamos apenas em Cloud.
+        if provider != "local":
+            payload["max_tokens"] = _CLOUD_MAX_TOKENS
         if provider == "local":
             payload["stream"] = False
 
@@ -416,8 +548,15 @@ class LLMClient:
                 kind=LLMErrorKind.TIMEOUT,
             ) from None
         except httpx.HTTPStatusError as exc:
+            hint = ""
+            if provider == "groq" and exc.response.status_code == 404:
+                hint = (
+                    f"\nDica: 404 no Groq geralmente indica modelo '{effective_model}' "
+                    f"não disponível na sua conta. Defina GROQ_MODEL no .env "
+                    "com um identificador do seu catálogo ativo."
+                )
             raise LLMProviderError(
-                f"Provedor '{provider}' retornou HTTP {exc.response.status_code}.",
+                f"Provedor '{provider}' retornou HTTP {exc.response.status_code}.{hint}",
                 kind=LLMErrorKind.HTTP_ERROR,
             ) from None
         except Exception as exc:  # defensivo por design: nunca vaza stack trace
@@ -434,8 +573,8 @@ class LLMClient:
         Aceita ambos os formatos (defensivo por design):
           • OpenAI-compatible: {"choices": [{"message": {"content": ...}}]}
           • Ollama nativo:     {"message": {"content": ...}}
-        Isso mantém compatibilidade com mocks (que usam OpenAI-format)
-        e com o Ollama real via /api/chat (que usa formato nativo).
+        Mantém compatibilidade com mocks (OpenAI-format) e com Ollama real
+        via /api/chat (formato nativo).
         """
         try:
             data: dict[str, Any] = response.json()
