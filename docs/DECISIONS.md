@@ -749,3 +749,60 @@ observabilidade de recursos nem canal de escalação para falhas persistentes.
 ### Fora de escopo
 - Gate estático bloqueante em CI (hoje é pré-sandbox, não substitui CI).
 - Métricas de rede/disco da sandbox.
+
+
+# ADR-009 — BUILD Mode Architecture (v4.2.0)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+A v4.0/v4.1 entregaram execução segura (Sandbox), auto-correção (TDDLoop) e
+guardrails estáticos, mas o FounderAI ainda apenas *avaliava* missões. A v4.2.0
+introduz o **Modo BUILD**: transformar uma intenção de produto em um MVP
+executável, com artefatos persistidos e validados de ponta a ponta.
+O caso canônico (North Star) é a **Barbearia**: agendamento de horários com
+serviços, listagem e cancelamento.
+
+## Decisão
+Adotar um pipeline de 6 estágios orquestrado por `BuildPipeline`, com agentes
+especializados e artefatos versionados em disco:
+
+1. **Requirements** (`RequirementsAgent`) → `requirements.md`
+   (objetivo, usuários, MVP, restrições, não-objetivos).
+2. **Architecture** (`ArchitectureAgent`) → `architecture.md`
+   (stack FastAPI+SQLite; arquivos: main.py, models.py, schemas.py,
+   database.py, test_main.py).
+3. **Implementation** (`ImplementationAgent`) → `files{}` + `test_files{}`
+   persistidos como artifacts.
+4. **Quality Gate** (`StaticAnalysisGate`) → ruff/mypy com até
+   `STATIC_ANALYSIS_MAX_CYCLES` reparos via `QAAgent.generate_fix`, **sem Docker**.
+5. **Test Execution** (`TDDLoop` + `DockerRunner`) → testes do MVP em sandbox.
+6. **Report** (`BuildReporter`) → `report.md` + `mission_state.json`.
+
+### Princípios
+- **Estado explícito:** `MissionState` (domínio v4.2) atualizado a cada estágio;
+  status final `COMPLETED` / `FAILED` / `ESCALATED`.
+- **Falha graciosa:** o pipeline nunca propaga exceção; erros viram status +
+  `mode_payload["error"]`, e o `mission_state.json` é sempre persistido.
+- **Artefatos auditáveis:** tudo em `<BUILD_ARTIFACTS_DIR>/<mission_id>/`,
+  com sanitização anti path-traversal por segmento.
+- **Testabilidade:** seams injetáveis (client/gate/repair/tdd/artifacts) via
+  Protocols; o caso da Barbearia tem variante mockada (CI) e real (`real_llm`).
+
+## Consequências
+- Positivas: MVP validado de ponta a ponta; custo reduzido (gate estático antes
+  do Docker); trilha de auditoria completa por missão.
+- Negativas: dependência de LLM para qualidade do código gerado (mitigada pelo
+  TDDLoop + gate); latência maior que o modo VALIDATE.
+
+## Alternativas rejeitadas
+- Gerar código sem testes e validar só com gate estático (perde a garantia
+  executável do MVP).
+- Persistir artefatos em banco/Qdrant (complexidade prematura; disco local é
+  suficiente e auditável para a v4.2).
+
+## Fora de escopo (v4.2.0)
+- Deploy automático (apenas `DeploymentStrategy.PRIVATE` definido).
+- Modos VALIDATE / DISCOVER / IMPROVE (enums reservados para v4.3+).

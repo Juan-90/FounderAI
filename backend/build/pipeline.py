@@ -1,7 +1,7 @@
 """
 BuildPipeline — orquestrador do Modo BUILD (v4.2.0).
 
-Estágios sequenciais:
+Estágios sequenciais (com hook on_stage para progresso na CLI):
   1. Requirements      → requirements.md
   2. Architecture      → architecture.md
   3. Implementation    → files{} + test_files{} (salvos como artifacts)
@@ -16,9 +16,11 @@ O MissionState é atualizado a cada estágio; falhas são tratadas graciosamente
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any, Callable, Optional, Protocol
 from uuid import uuid4
 
+from backend.analysis.models import StaticAnalysisResult
+from backend.analysis.static_gate import StaticAnalysisGate
 from backend.build.agents import (
     ArchitectureAgent,
     BuildReporter,
@@ -31,8 +33,8 @@ from backend.domain.enums import MissionStatus, ProjectMode
 from backend.domain.models import MissionState
 from backend.qa.agent import QAAgent
 from backend.qa.schemas import TDDRequest, TDDResult
-from backend.analysis.models import StaticAnalysisResult
-from backend.analysis.static_gate import StaticAnalysisGate
+
+StageCallback = Callable[[int, str], None]
 
 
 class StaticGateLike(Protocol):
@@ -88,7 +90,12 @@ class BuildPipeline:
             from backend.qa.orchestrator import TDDLoop
             self._tdd = TDDLoop(config=self._config)
 
-    # ── Helpers ─
+    # ── Helpers ──
+    @staticmethod
+    def _emit(on_stage: Optional[StageCallback], index: int, label: str) -> None:
+        if on_stage is not None:
+            on_stage(index, label)
+
     def _advance(self, state: MissionState, stage: str) -> None:
         state.current_stage = stage
         state.updated_at = _utcnow()
@@ -116,7 +123,12 @@ class BuildPipeline:
         return files, test_files
 
     # ── Orquestração ──
-    async def run(self, intent: str, project_name: str = "BarbeariaApp") -> MissionState:
+    async def run(
+        self,
+        intent: str,
+        project_name: str = "BarbeariaApp",
+        on_stage: Optional[StageCallback] = None,
+    ) -> MissionState:
         state = MissionState(
             mission_id=uuid4().hex,
             project_id=uuid4().hex,
@@ -130,16 +142,19 @@ class BuildPipeline:
 
         try:
             # 1 — Requirements
+            self._emit(on_stage, 1, "Generating Requirements...")
             req_md = await self._requirements.generate(intent)
             self._save(state, "requirements.md", req_md)
             self._advance(state, "requirements")
 
             # 2 — Architecture
+            self._emit(on_stage, 2, "Designing Architecture...")
             arch_md = await self._architecture.generate(req_md)
             self._save(state, "architecture.md", arch_md)
             self._advance(state, "architecture")
 
             # 3 — Implementation
+            self._emit(on_stage, 3, "Generating Code & Tests...")
             files, test_files = await self._implementation.generate(arch_md)
             for name, content in files.items():
                 self._save(state, name, content)
@@ -148,10 +163,12 @@ class BuildPipeline:
             self._advance(state, "implementation")
 
             # 4 — Quality Gate (com reparos)
+            self._emit(on_stage, 4, "Static Analysis Gate (Ruff/Mypy)...")
             files, test_files = await self._quality_gate(state, files, test_files)
             self._advance(state, "quality_gate")
 
             # 5 — Test Execution (sandbox)
+            self._emit(on_stage, 5, "Sandbox Execution & TDD Loop...")
             tdd = await self._tdd.run(
                 TDDRequest(
                     source_files=files,
@@ -166,6 +183,7 @@ class BuildPipeline:
             self._advance(state, "test_execution")
 
             # 6 — Report
+            self._emit(on_stage, 6, "Generating Final Report...")
             report_md = await self._reporter.generate(
                 {
                     "project_name": project_name,

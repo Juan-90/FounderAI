@@ -4,7 +4,6 @@ O **FounderAI** é uma ferramenta de apoio à validação de ideias de startups 
 
 ## 🛡️ O que a v4.0 adiciona
 
-<<<<<<< HEAD
 | Capacidade | Descrição |
 |---|---|
 | **Sandbox Isolada (Fase A)** | Containers Docker efêmeros e hardenizados (`--rm --network=none --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=64 --memory=512m --cpus=1.0`) para executar código sem risco ao host. |
@@ -119,6 +118,16 @@ No prompt de esclarecimento: digite `cancel`, `abort` ou `/cancel`, **ou** press
 Resumo exibido antes da deliberação, ex.:
 `📁 Contexto: 3 arquivo(s) incluído(s), 1 truncado(s), 0 omitido(s)`.
 
+## 🏗️ Modo BUILD (v4.2.0)
+
+Transforma uma intenção de produto em um MVP executável e validado, em 6 estágios
+(Requirements → Architecture → Implementation → Quality Gate → Sandbox/TDD → Report).
+
+**Executar:**
+```bash
+python main.py build "Quero um sistema de agendamento para minha barbearia"
+python main.py build "Sua intent aqui" --project-name MeuApp
+
 ## 🧪 Como Executar a Suíte Total de Testes
 
 **Execução padrão (162 testes; testes de LLM real skipam graciosamente):**
@@ -178,7 +187,6 @@ tests/conftest.py           Marker real_llm + flag --run-real-llm
 - Persistência automática de patches no Git / abertura de PRs
 - Execução de código com acesso à rede
 - Autonomia sem limites de retries
-=======
 ## 📌 Novidades da Versão 3.0 (Sprint 4)
 
 A versão 3.0 recalibrou os critérios do conselho para eliminar falsos-positivos de veto identificados em modelos menores (`2b`), promovendo deliberações mais equilibradas sem perder o rigor técnico:
@@ -231,4 +239,3 @@ Bash
 pytest tests/unit/ -v --asyncio-mode=auto
 📝 Documentação
 Para entender as motivações técnicas por trás dos limiares da v3.0 e a evolução dos prompts, consulte docs/DECISIONS.md
->>>>>>> ff224362c462b99701ed6faacf47afceaa1ab351

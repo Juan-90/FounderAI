@@ -1,25 +1,15 @@
 """
-Fundador IA v3.5 — CLI Principal
-Orquestra deliberação multi-turno (Turno 0 + Turno 1) com diálogo interativo.
-
-Fase 3 (Bloco 1) — Polimento UX:
-  • Resumo de contexto estruturado (incluídos/truncados/omitidos);
-  • Painel de esclarecimento do Turno 0 com tokens de cancelamento explícitos;
-  • Cancelamento gracioso: cancel / abort / /cancel / Ctrl+C → status CANCELLED;
-  • Recapitulação do histórico de esclarecimento no veredito final.
-
-Fase 3 (Bloco 2) — Observabilidade & Config:
-  • Coluna "Provedor" na tabela de jurados (modelo + indicador de fallback);
-  • Avisos de configuração na inicialização (Cloud sem API key → fallback local).
+Fundador IA v4.2.0 — CLI Principal
+Orquestra deliberação multi-turno (Turno 0 + Turno 1) e o Modo BUILD.
 
 Uso:
     python main.py                              Menu interativo
     python main.py "Missão"                     Deliberação direta
     python main.py "Missão" -f README.md        Com arquivo de contexto
+    python main.py build "Intent do projeto"    Modo BUILD (v4.2.0)
     python main.py --last                        Reexecutar última deliberação
-    python main.py --rerun <ID>                 Reexecutar por ID
+    python main.py --rerun ID_COMPLETO          Reexecutar por ID
     python main.py --history                    Ver histórico
-    python main.py --history -n 10              Últimas 10 deliberações
 """
 
 from __future__ import annotations
@@ -40,7 +30,6 @@ from backend.schemas.council import JurorResponse
 
 console = Console()
 
-# Tokens aceitos para cancelamento gracioso da deliberação (Fase 3 — 3.2)
 _CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 
 
@@ -51,12 +40,13 @@ _CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 class _RichHelpFormatter(argparse.HelpFormatter):
     def format_help(self) -> str:
         return (
-            "\n  🏛  Fundador IA v3.5 — Conselho Consultivo Artificial\n"
+            "\n  🏛  Fundador IA v4.2.0 — Conselho Consultivo Artificial\n"
             "  ─────────────────────────────────────────────────────\n\n"
             + super().format_help()
             + "\n  Exemplos:\n"
             "    python main.py \"Criar app de finanças para MEIs\"\n"
             "    python main.py \"Missão\" -f README.md -f docs/PRD.md\n"
+            "    python main.py build \"Quero um sistema de agendamento para minha barbearia\"\n"
             "    python main.py --last\n"
             "    python main.py --rerun abc12345-...\n"
             "    python main.py --history -n 10\n"
@@ -71,10 +61,14 @@ def _build_parser() -> argparse.ArgumentParser:
         add_help=True,
     )
     parser.add_argument("mission", nargs="?", default=None,
-                        help="Texto da missão a ser avaliada.")
+                        help="Texto da missão, ou a palavra 'build' para o Modo BUILD.")
+    parser.add_argument("build_intent", nargs="?", default=None,
+                        help="Intent do projeto (usar com: python main.py build \"...\").")
     parser.add_argument("-f", "--file", action="append", dest="files",
                         default=[], metavar="ARQUIVO",
                         help="Arquivo de contexto (repetível). Ex: -f README.md")
+    parser.add_argument("--project-name", default="BarbeariaApp", dest="project_name",
+                        metavar="NOME", help="Nome do projeto no Modo BUILD.")
     parser.add_argument("--history", action="store_true",
                         help="Exibir histórico de deliberações anteriores.")
     parser.add_argument("-n", type=int, default=5, dest="history_limit",
@@ -100,13 +94,13 @@ def _parse_args() -> argparse.Namespace:
 
 def _interactive_menu() -> argparse.Namespace:
     ns = argparse.Namespace(
-        mission=None, files=[], history=False, history_limit=5,
-        last=False, rerun=None,
+        mission=None, build_intent=None, files=[], history=False,
+        history_limit=5, last=False, rerun=None, project_name="BarbeariaApp",
     )
     console.print()
     console.print(
         Panel(
-            "[bold cyan]Fundador IA v3.5[/bold cyan] — Conselho Consultivo Artificial\n\n"
+            "[bold cyan]Fundador IA v4.2.0[/bold cyan] — Conselho Consultivo Artificial\n\n"
             "  [bold][1][/bold]  Nova Missão\n"
             "  [bold][2][/bold]  Reexecutar Última Deliberação\n"
             "  [bold][3][/bold]  Ver Histórico de Decisões\n"
@@ -327,16 +321,14 @@ def _render_header(mission: str, included_files: list[str]) -> None:
     console.print(Panel(
         f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
         f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{context_info}",
-        title="[bold cyan]🏛  Fundador IA v3.5[/bold cyan]",
+        title="[bold cyan]🏛  Fundador IA v4.2.0[/bold cyan]",
         border_style="cyan", padding=(1, 2),
     ))
     console.print()
 
 
 def _render_config_warnings() -> None:
-    """Fase 3 (3.4): avisos de configuração na inicialização."""
     from backend.core.config import settings as app_settings
-
     warnings = app_settings.validate_provider_config()
     if not warnings:
         return
@@ -349,7 +341,6 @@ def _render_config_warnings() -> None:
 
 
 def _observability_cell(r: JurorResponse) -> str:
-    """Fase 3 (3.3): célula 'Provedor' com modelo e indicador de fallback."""
     if r.provider_used == "fallback-safe":
         return "[red]fallback-safe[/red] (sem LLM)"
     if r.model_used:
@@ -363,7 +354,6 @@ def _observability_cell(r: JurorResponse) -> str:
 
 
 def _render_juror_row(r: JurorResponse) -> None:
-    """Exibe resultado inline de um jurado durante o spinner."""
     score_style = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
     verdict_icon = "✅" if r.verdict.value == "APPROVE" else "🚫"
     console.print(
@@ -401,17 +391,11 @@ def _render_jurors_table(responses: list[JurorResponse]) -> None:
 
 
 def _render_clarification_recap(state: DeliberationState) -> None:
-    """
-    Fase 3 (3.2): no resumo final, explicita que houve Turno 0 de esclarecimento,
-    exibindo as perguntas do conselho e a resposta do fundador (resumida).
-    """
     if not state.clarification or not state.founder_response:
         return
-
     questions = "\n".join(f"  ❓ {q}" for q in state.clarification.questions)
     answer = state.founder_response
     answer_short = answer if len(answer) <= 300 else answer[:297] + "..."
-
     console.print()
     console.print(Panel(
         f"[bold]Perguntas do Turno 0:[/bold]\n{questions}\n\n"
@@ -425,9 +409,7 @@ def _render_final_verdict(final_state: DeliberationState) -> None:
     decision = final_state.final_decision
     if not decision:
         return
-
     _render_clarification_recap(final_state)
-
     approved = decision.verdict == "APPROVED"
     reason_line = (
         f"\n[dim]Motivo: [/dim][italic]{decision.reason}[/italic]"
@@ -446,11 +428,9 @@ def _render_final_verdict(final_state: DeliberationState) -> None:
 
 
 def _render_clarification(state: DeliberationState) -> None:
-    """Exibe as perguntas do Turno 0 para o fundador (painel Rich numerado)."""
     clarification = state.clarification
     if not clarification:
         return
-
     questions_text = "\n".join(
         f"  [bold]{i}.[/bold] {q}" for i, q in enumerate(clarification.questions, 1)
     )
@@ -474,10 +454,6 @@ async def _collect_juror_responses(
     turn_label: str,
     extra_context: str = "",
 ) -> list[JurorResponse]:
-    """
-    Executa os 3 jurados sequencialmente com spinner.
-    extra_context é injetado no prompt em deliberações de Turno 1.
-    """
     from backend.agents.council import JURORS, _evaluate_juror
     from backend.core.llm_client import LLMProviderError
 
@@ -520,10 +496,6 @@ async def _run_deliberation(
     context_block: str,
     included_files: list[str],
 ) -> None:
-    """
-    Orquestra o fluxo completo: Turno 0 → (opcional) Turno 1 → resultado.
-    Persiste a decisão final no histórico.
-    """
     from backend.core.council import (
         cancel_deliberation,
         process_founder_reply,
@@ -531,17 +503,12 @@ async def _run_deliberation(
     )
     from backend.core.history import save_council_decision
 
-    # ── TURNO 0 — Análise Inicial ─────────────────────────────────────────────
     console.print(Rule("[bold cyan][TURNO 0 — ANÁLISE INICIAL][/bold cyan]", style="cyan"))
     console.print()
 
-    turn0_responses = await _collect_juror_responses(
-        mission, context_block, "[TURNO 0]"
-    )
-
+    turn0_responses = await _collect_juror_responses(mission, context_block, "[TURNO 0]")
     state = process_turn0(mission, turn0_responses)
 
-    # ── Sem necessidade de esclarecimento → resultado direto ──────────────────
     if state.status == "FINAL":
         console.print()
         console.print(Rule("[bold green][DELIBERAÇÃO CONCLUÍDA][/bold green]", style="green"))
@@ -550,7 +517,6 @@ async def _run_deliberation(
         _persist_decision(state, included_files, save_council_decision)
         return
 
-    # ── AGUARDANDO ESCLARECIMENTO ─────────────────────────────────────────────
     console.print(Rule("[bold yellow][AGUARDANDO ESCLARECIMENTO][/bold yellow]", style="yellow"))
     _render_clarification(state)
 
@@ -583,22 +549,17 @@ async def _run_deliberation(
         console.print()
         sys.exit(0)
 
-    # ── TURNO 1 — Deliberação Final ───────────────────────────────────────────
     console.print()
     console.print(Rule("[bold cyan][TURNO 1 — DELIBERAÇÃO FINAL][/bold cyan]", style="cyan"))
     console.print()
 
     turn1_responses = await _collect_juror_responses(
-        mission, context_block,
-        turn_label="[TURNO 1]",
-        extra_context=founder_reply,
+        mission, context_block, turn_label="[TURNO 1]", extra_context=founder_reply,
     )
-
     final_state = process_founder_reply(state, founder_reply, turn1_responses)
 
     console.print()
     console.print(Rule("[bold green][DELIBERAÇÃO CONCLUÍDA][/bold green]", style="green"))
-
     console.print()
     console.print("[bold dim]Avaliações — Turno 1[/bold dim]")
     _render_jurors_table(turn1_responses)
@@ -611,19 +572,12 @@ def _persist_decision(
     included_files: list[str],
     save_fn: Callable[..., str],
 ) -> None:
-    """
-    Persiste a decisão final no histórico de forma segura.
-
-    O history espera o shape de backend.schemas.council
-    (mission / final_verdict / average_score / juror_responses).
-    """
     from backend.schemas.council import CouncilDecision as CouncilSchemaDecision
 
     if not final_state.final_decision:
         return
 
     fd = final_state.final_decision
-
     compatible = CouncilSchemaDecision(
         mission=final_state.mission,
         final_verdict=fd.verdict,
@@ -655,11 +609,15 @@ async def main() -> None:
         _show_history(args.history_limit)
         sys.exit(0)
 
+    # ── Modo BUILD (v4.2.0) ──
+    if args.mission == "build":
+        from backend.build.cli import run_build_mode
+        code = await run_build_mode(args.build_intent or "", project_name=args.project_name)
+        sys.exit(code)
+
     if args.last or args.rerun:
         mission, prev_files = _load_for_rerun(
-            use_last=args.last,
-            rerun_id=args.rerun,
-            override_files=args.files,
+            use_last=args.last, rerun_id=args.rerun, override_files=args.files,
         )
     else:
         mission = args.mission or ""
@@ -668,9 +626,7 @@ async def main() -> None:
     if not mission:
         _exit_error("Missão não pode ser vazia.")
 
-    # Fase 3 (3.4): avisos de configuração antes de qualquer chamada LLM
     _render_config_warnings()
-
     context_block, included_files = _prepare_context(prev_files)
     _render_header(mission, included_files)
 
