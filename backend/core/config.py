@@ -1,12 +1,14 @@
 """
-Configurações centrais do FounderAI (v4.0 final).
+Configurações centrais do FounderAI (v4.1.0).
 
 Carrega variáveis do `.env` via pydantic-settings (Pydantic V2) e expõe:
   • Provedores LLM tipados (`ProviderName`) com fallback Cloud → Local (Fase 2);
   • Overrides opcionais por papel (Architect, SecurityCoder, etc.) (Fase 2);
-  • Modelos customizáveis por provedor (`GROQ_MODEL`, `OPENROUTER_MODEL`, etc.);
+  • Modelos customizáveis por provedor (GROQ_MODEL, etc.) (v4.0);
   • Limites de contexto para `prepare_context_payload` (Fase 3);
   • Sandbox isolada Docker (v4.0 Fase A);
+  • Pre-Sandbox Guardrail: ruff/mypy (v4.1.0 Módulo A);
+  • Escalation Webhook: URL/provider/timeout (v4.1.0 Módulo C);
   • Campos legados da Fase 1 (Ollama, PostgreSQL, Qdrant, App) intactos.
 """
 
@@ -46,9 +48,7 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
     # ─────────────────────────────────────────────
-    # Modelos customizáveis por provedor (v4.0 fix)
-    # Permitindo override via .env sem quebrar a validação Pydantic V2.
-    # Padrões alinhados com modelos ativos e responsivos em 2026.
+    # Modelos customizáveis por provedor (v4.0)
     # ─────────────────────────────────────────────
     GROQ_MODEL: str = "openai/gpt-oss-20b"
     OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
@@ -67,6 +67,19 @@ class Settings(BaseSettings):
     SANDBOX_IMAGE: str = "founderai-sandbox-python:v1"
     SANDBOX_TIMEOUT_SECONDS: int = 20
     SANDBOX_MAX_OUTPUT_BYTES: int = 1048576
+
+    # ─────────────────────────────────────────────
+    # v4.1.0 Módulo A — Pre-Sandbox Guardrail
+    # ─────────────────────────────────────────────
+    STATIC_ANALYSIS_MYPY_ENABLED: bool = False
+    STATIC_ANALYSIS_TIMEOUT_SECONDS: float = 30.0
+
+    # ─────────────────────────────────────────────
+    # v4.1.0 Módulo C — Escalation Webhook
+    # ─────────────────────────────────────────────
+    NOTIFICATION_WEBHOOK_URL: str = ""
+    NOTIFICATION_PROVIDER: str = "GENERIC"
+    NOTIFICATION_TIMEOUT_SECONDS: float = 8.0
 
     # ─────────────────────────────────────────────
     # Legado Fase 1 — Ollama local (retrocompatibilidade)

@@ -1,8 +1,5 @@
 """
-Schemas Pydantic V2 da Sandbox Isolada (v4.0 Fase A).
-
-Contrato de entrada/saída do runner: arquivos + comando tipados,
-limites de tempo e de output configuráveis por chamada.
+Schemas Pydantic V2 da Sandbox Isolada (v4.0 Fase A + v4.1.0 Telemetry).
 """
 
 from __future__ import annotations
@@ -28,7 +25,7 @@ class SandboxInput(BaseModel):
 
 
 class SandboxOutput(BaseModel):
-    """Resultado da execução isolada."""
+    """Resultado da execução isolada + telemetria de recursos (v4.1.0)."""
 
     exit_code: Optional[int] = Field(
         default=None,
@@ -43,4 +40,17 @@ class SandboxOutput(BaseModel):
     error: Optional[str] = Field(
         default=None, description="Erros do Docker/infraestrutura"
     )
-    
+
+    # ── v4.1.0 Telemetry (opcionais, coleta best-effort) ──
+    ram_peak_mb: Optional[float] = Field(
+        default=None, description="Pico de RAM em MB (via docker stats)"
+    )
+    cpu_percent_avg: Optional[float] = Field(
+        default=None, description="Média de uso de CPU (%)"
+    )
+    cpu_percent_max: Optional[float] = Field(
+        default=None, description="Pico de uso de CPU (%)"
+    )
+    container_id: Optional[str] = Field(
+        default=None, description="ID do container que executou o comando"
+    )
