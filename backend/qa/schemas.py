@@ -1,12 +1,10 @@
 """
-Schemas Pydantic V2 do Loop TDD (v4.0 Fase B — Bloco 1).
-
-Contratos estritos do ciclo self-healing: pedido, tentativa e resultado.
+Schemas Pydantic V2 do Loop TDD (v4.0 Fase B + v4.1.0 observabilidade estática).
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -31,6 +29,9 @@ class TDDRequest(BaseModel):
     )
     goal: Optional[str] = Field(
         default=None, description="Descrição opcional da intenção do código"
+    )
+    mission_id: str = Field(
+        default="", description="ID da missão (usado em escalação/webhook)"
     )
 
 
@@ -64,3 +65,12 @@ class TDDResult(BaseModel):
         description="True se atingiu o limite de retries sem sucesso",
     )
     summary: str
+    # ── v4.1.0 observabilidade do gate estático ──
+    static_gate_passed: Optional[bool] = Field(
+        default=None,
+        description="None=gate não executado; True/False=resultado do gate",
+    )
+    failure_stage: Optional[Literal["static_gate", "sandbox"]] = Field(
+        default=None,
+        description="Estágio onde o loop falhou, se houver",
+    )

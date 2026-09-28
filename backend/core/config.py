@@ -1,15 +1,5 @@
 """
 Configurações centrais do FounderAI (v4.1.0).
-
-Carrega variáveis do `.env` via pydantic-settings (Pydantic V2) e expõe:
-  • Provedores LLM tipados (`ProviderName`) com fallback Cloud → Local (Fase 2);
-  • Overrides opcionais por papel (Architect, SecurityCoder, etc.) (Fase 2);
-  • Modelos customizáveis por provedor (GROQ_MODEL, etc.) (v4.0);
-  • Limites de contexto para `prepare_context_payload` (Fase 3);
-  • Sandbox isolada Docker (v4.0 Fase A);
-  • Pre-Sandbox Guardrail: ruff/mypy (v4.1.0 Módulo A);
-  • Escalation Webhook: URL/provider/timeout (v4.1.0 Módulo C);
-  • Campos legados da Fase 1 (Ollama, PostgreSQL, Qdrant, App) intactos.
 """
 
 from __future__ import annotations
@@ -18,28 +8,21 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Tipo único para nomes de provedores (Cloud + Local).
 ProviderName = Literal["groq", "openrouter", "openai", "local"]
 
 
 class Settings(BaseSettings):
     """Settings da aplicação (12-factor via env/.env)."""
 
-    # ─────────────────────────────────────────────
-    # Fase 2 — Provedores LLM (agnósticos)
-    # ─────────────────────────────────────────────
+    # ── Fase 2 — Provedores LLM ──
     PRIMARY_PROVIDER: ProviderName = "groq"
     FALLBACK_PROVIDER: ProviderName = "local"
     LLM_TIMEOUT_SECONDS: float = 60.0
-
-    # Overrides opcionais por papel (None → usa PRIMARY_PROVIDER)
     ARCHITECT_PROVIDER: ProviderName | None = None
     SECURITYCODER_PROVIDER: ProviderName | None = None
     PRODUCTSTRATEGIST_PROVIDER: ProviderName | None = None
 
-    # ─────────────────────────────────────────────
-    # Fase 2 — Endpoints e credenciais Cloud
-    # ─────────────────────────────────────────────
+    # ── Fase 2 — Endpoints e credenciais Cloud ──
     GROQ_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
@@ -47,68 +30,53 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
-    # ─────────────────────────────────────────────
-    # Modelos customizáveis por provedor (v4.0)
-    # ─────────────────────────────────────────────
+    # ── Modelos customizáveis (v4.0) ──
     GROQ_MODEL: str = "openai/gpt-oss-20b"
     OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
     OPENAI_MODEL: str = "gpt-4o-mini"
 
-    # ─────────────────────────────────────────────
-    # Fase 3 — Limites de Contexto
-    # ─────────────────────────────────────────────
+    # ── Fase 3 — Limites de Contexto ──
     MAX_FILE_CHARS: int = 15000
     MAX_TOTAL_CONTEXT_CHARS: int = 40000
 
-    # ─────────────────────────────────────────────
-    # v4.0 Fase A — Sandbox Isolada (Docker efêmero)
-    # ─────────────────────────────────────────────
+    # ── v4.0 Fase A — Sandbox ──
     SANDBOX_ENABLED: bool = True
     SANDBOX_IMAGE: str = "founderai-sandbox-python:v1"
     SANDBOX_TIMEOUT_SECONDS: int = 20
     SANDBOX_MAX_OUTPUT_BYTES: int = 1048576
 
-    # ─────────────────────────────────────────────
-    # v4.1.0 Módulo A — Pre-Sandbox Guardrail
-    # ─────────────────────────────────────────────
-    STATIC_ANALYSIS_MYPY_ENABLED: bool = False
+    # ── v4.1.0 Módulo A — Pre-Sandbox Guardrail ──
+    STATIC_ANALYSIS_ENABLED: bool = True
+    STATIC_ANALYSIS_MYPY_ENABLED: bool = True
+    STATIC_ANALYSIS_MAX_CYCLES: int = 2
     STATIC_ANALYSIS_TIMEOUT_SECONDS: float = 30.0
 
-    # ─────────────────────────────────────────────
-    # v4.1.0 Módulo C — Escalation Webhook
-    # ─────────────────────────────────────────────
-    NOTIFICATION_WEBHOOK_URL: str = ""
-    NOTIFICATION_PROVIDER: str = "GENERIC"
-    NOTIFICATION_TIMEOUT_SECONDS: float = 8.0
+    # ── v4.1.0 Módulo C — Escalation Webhook ──
+    ESCALATION_WEBHOOK_ENABLED: bool = False
+    ESCALATION_WEBHOOK_URL: str | None = None
+    ESCALATION_WEBHOOK_PROVIDER: str = "generic"
+    ESCALATION_WEBHOOK_TIMEOUT_SECONDS: int = 8
 
-    # ─────────────────────────────────────────────
-    # Legado Fase 1 — Ollama local (retrocompatibilidade)
-    # ─────────────────────────────────────────────
+    # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_timeout: float = 60.0
     model_primary: str = "gemma2:2b"
     model_reasoning: str = "gemma2:2b"
     council_model: str = "gemma2:2b"
 
-    # ─────────────────────────────────────────────
-    # PostgreSQL
-    # ─────────────────────────────────────────────
+    # ── PostgreSQL ──
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "fundador_ia"
     postgres_user: str = "fundador"
     postgres_password: str = "fundador"
 
-    # ─────────────────────────────────────────────
-    # Qdrant
-    # ─────────────────────────────────────────────
+    # ── Qdrant ──
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
     qdrant_collection: str = "missions"
 
-    # ─────────────────────────────────────────────
-    # App
-    # ─────────────────────────────────────────────
+    # ── App ─
     app_name: str = "Fundador IA"
     app_version: str = "0.2.0"
     debug: bool = False
@@ -119,9 +87,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ─────────────────────────────────────────────
-    # Helpers tipados (usados pelo LLMClient)
-    # ─────────────────────────────────────────────
     @property
     def postgres_url(self) -> str:
         return (
@@ -130,7 +95,6 @@ class Settings(BaseSettings):
         )
 
     def base_url_for(self, provider: ProviderName) -> str:
-        """URL base (padrão OpenAI-compatible) de cada provedor."""
         urls: dict[ProviderName, str] = {
             "groq": self.GROQ_BASE_URL,
             "openrouter": self.OPENROUTER_BASE_URL,
@@ -140,7 +104,6 @@ class Settings(BaseSettings):
         return urls[provider]
 
     def api_key_for(self, provider: ProviderName) -> str:
-        """Chave de API do provedor (vazia para local)."""
         keys: dict[ProviderName, str] = {
             "groq": self.GROQ_API_KEY,
             "openrouter": self.OPENROUTER_API_KEY,
@@ -150,12 +113,6 @@ class Settings(BaseSettings):
         return keys[provider]
 
     def default_model_for(self, provider: ProviderName) -> str:
-        """
-        Modelo padrão por provedor.
-
-        Respeita os campos customizáveis (GROQ_MODEL, etc.) quando definidos,
-        caindo no modelo padrão do Ollama para `local`.
-        """
         models: dict[ProviderName, str] = {
             "groq": self.GROQ_MODEL,
             "openrouter": self.OPENROUTER_MODEL,
@@ -164,16 +121,7 @@ class Settings(BaseSettings):
         }
         return models[provider]
 
-    # ─────────────────────────────────────────────
-    # Fase 3 — Validação de configuração (Bloco 2)
-    # ─────────────────────────────────────────────
     def validate_provider_config(self) -> list[str]:
-        """
-        Verifica consistência entre provedor primário e credenciais.
-
-        Returns:
-            Lista de mensagens de alerta (vazia = configuração OK).
-        """
         warnings: list[str] = []
         primary = self.PRIMARY_PROVIDER
         fallback = self.FALLBACK_PROVIDER

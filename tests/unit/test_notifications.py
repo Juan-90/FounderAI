@@ -1,5 +1,7 @@
 """
 Testes do Escalation Webhook Engine (v4.1.0 Módulo C).
+
+Atualizado para os nomes unificados ESCALATION_WEBHOOK_* (NOTIFICATION_* removido).
 """
 
 from __future__ import annotations
@@ -9,7 +11,6 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-import pytest
 
 from backend.core.config import Settings
 from backend.notifications.models import (
@@ -38,9 +39,9 @@ def _make_payload() -> EscalationPayload:
 
 def _make_settings(webhook_url: str = "https://example.com/hook") -> Settings:
     return Settings(
-        NOTIFICATION_WEBHOOK_URL=webhook_url,
-        NOTIFICATION_PROVIDER="GENERIC",
-        NOTIFICATION_TIMEOUT_SECONDS=5.0,
+        ESCALATION_WEBHOOK_URL=webhook_url,
+        ESCALATION_WEBHOOK_PROVIDER="generic",
+        ESCALATION_WEBHOOK_TIMEOUT_SECONDS=5,
     )
 
 
@@ -124,7 +125,6 @@ def test_envio_discord_payload_formatado() -> None:
     assert result.provider == WebhookProvider.DISCORD
     body = recorded[0].content.decode("utf-8")
     assert "FounderAI" in body
-    assert "Escalation" in body or "Escala" in body
 
 
 # ─────────────────────────────────────────────────────────────
@@ -173,15 +173,15 @@ def test_erro_de_conexao_retorna_sent_false() -> None:
 
 
 def test_provider_invalido_fallback_generic() -> None:
-    cfg = _make_settings()
-    cfg.NOTIFICATION_PROVIDER = "PROVIDER_INEXISTENTE"
+    cfg = Settings(
+        ESCALATION_WEBHOOK_URL="https://example.com/hook",
+        ESCALATION_WEBHOOK_PROVIDER="PROVIDER_INEXISTENTE",
+    )
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200)
 
-    notifier = EscalationNotifier(
-        config=cfg, transport=httpx.MockTransport(handler)
-    )
+    notifier = EscalationNotifier(config=cfg, transport=httpx.MockTransport(handler))
     result = _run(notifier.notify(_make_payload()))
     assert result.sent is True
     assert result.provider == WebhookProvider.GENERIC

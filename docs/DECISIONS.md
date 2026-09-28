@@ -712,3 +712,40 @@ Com a introdução da Arquitetura Híbrida (Fase 2), era necessário conectar o 
 - **SDKs oficiais por provedor** (`openai`, `groq`, `httpx`): descartado por multiplicar dependências e duplicar lógica de erro;
 - **Adapters por provedor (padrão Strategy):** descartado por complexidade prematura — o protocolo OpenAI-compatible já homogeneiza 100% dos casos atuais;
 - **Retry com backoff exponencial**: descartado nesta fase em favor do fallback imediato (mais alinhado à UX do jurado multi-agente).
+
+
+---
+
+## ADR-008 — v4.1.0: Guardrails Estáticos, Telemetria de Sandbox e Escalação Observável
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+### Contexto
+A v4.0 entregou execução segura (Sandbox) e auto-correção (TDDLoop), mas o loop
+desperdiçava ciclos de Docker em código com erros estáticos óbvios e não possuía
+observabilidade de recursos nem canal de escalação para falhas persistentes.
+
+### Decisões
+1. **Pre-Sandbox Guardrail (Módulo A):** `StaticAnalysisGate` executa `ruff` (+`mypy`
+   opcional) em `TemporaryDirectory` ANTES de subir container. Falhas estáticas são
+   corrigidas pelo QAAgent em até `STATIC_ANALYSIS_MAX_CYCLES=2` ciclos sem Docker;
+   persistindo, o loop interrompe com `failure_stage="static_gate"`.
+2. **Telemetria de Sandbox (Módulo B):** `SandboxOutput` ganha `ram_peak_mb`,
+   `cpu_percent_avg/max`, `container_id`. Coleta best-effort via `docker stats
+   --no-stream` antes do `rm -f` (flag `--rm` removida, semântica de cleanup idêntica).
+3. **Escalation Webhook (Módulo C):** `EscalationNotifier` async never-throw com
+   adaptadores GENERIC/DISCORD/SLACK/TELEGRAM. Disparado apenas quando
+   `escalated=True` E `ESCALATION_WEBHOOK_ENABLED=true`, de forma não-bloqueante.
+4. **Unificação de config:** `NOTIFICATION_*` (v4.1.0-P1) renomeado para
+   `ESCALATION_WEBHOOK_*` para evitar duplicação de fonte de verdade.
+
+### Consequências
+- Redução de ciclos de Docker desperdiçados (gate estático barato primeiro).
+- Observabilidade de recursos permite right-sizing de limites de sandbox.
+- Falhas persistentes agora alertam canais externos sem acoplamento ao Council.
+
+### Fora de escopo
+- Gate estático bloqueante em CI (hoje é pré-sandbox, não substitui CI).
+- Métricas de rede/disco da sandbox.
