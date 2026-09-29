@@ -1,5 +1,5 @@
 """
-Configurações centrais do FounderAI (v4.3.0 + resiliência de LLM).
+Configurações centrais do FounderAI (v4.4.0 — VALIDATE Mode).
 """
 
 from __future__ import annotations
@@ -18,9 +18,7 @@ class Settings(BaseSettings):
     PRIMARY_PROVIDER: ProviderName = "groq"
     FALLBACK_PROVIDER: ProviderName = "local"
     LLM_TIMEOUT_SECONDS: float = 60.0
-    # Timeout do provider LOCAL (Ollama) — codegen em CPU é lento (v4.3 hotfix).
     LLM_LOCAL_TIMEOUT_SECONDS: float = 180.0
-    # Retry com backoff para HTTP transitório (429/5xx) antes do fallback.
     LLM_HTTP_RETRIES: int = 2
     LLM_RETRY_BACKOFF_SECONDS: float = 1.5
     ARCHITECT_PROVIDER: ProviderName | None = None
@@ -72,6 +70,11 @@ class Settings(BaseSettings):
     BUILD_GAME_ENABLED: bool = True
     BUILD_GAME_ENGINE: str = "pygame"
     BUILD_GAME_HEADLESS: bool = True
+
+    # ── v4.4.0 — VALIDATE Mode (Path C / EcoTrack-IA) ──
+    VALIDATE_MODE_ENABLED: bool = True
+    VALIDATE_ARTIFACTS_DIR: str = "artifacts/validate"
+    VALIDATE_DEFAULT_VERDICT_IF_UNCERTAIN: str = "INVESTIGATE"
 
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
