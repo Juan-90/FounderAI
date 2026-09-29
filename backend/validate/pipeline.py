@@ -1,23 +1,22 @@
 """
-ValidatePipeline — orquestrador do Modo VALIDATE (v4.4.0).
+ValidatePipeline — orquestrador do Modo VALIDATE (v4.4.0 + erros detalhados).
 
-Executa os 7 estágios analíticos em sequência e persiste TODOS os artefatos
-em artifacts/validate/<mission_id>/:
-  idea_profile.json, market_problem.md, competitors.md,
-  technical_feasibility.md, risks_contrarian.md, experiments.md,
-  validation_report.md, mission_state.json
-
-O MissionState é criado com mode=VALIDATE e o mode_payload preenchido via
-ValidatePayload.build(). Falhas são tratadas graciosamente (status FAILED +
-validation_report.md de falha + mission_state.json sempre persistido).
+v4.4.0 hotfix:
+  • Cada agente roda em _run_stage com try/except que imprime no console Rich
+    "⚠️  Erro no estágio <Agente>: <detalhes>" e propaga para o handler de run.
+  • O handler de run grava a mensagem exata em mode_payload["error"],
+    mode_payload["final_report"] e validation_report.md.
 """
 
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Coroutine, Optional
+
+from rich.console import Console
 
 from backend.core.config import Settings, settings
 from backend.domain.artifacts import ArtifactManager
@@ -34,6 +33,8 @@ from backend.validate.agents import (
 )
 from backend.validate.schemas import ValidatePayload, ValidateRequest
 
+console = Console(stderr=True)
+
 StageCallback = Callable[[int, str], None]
 
 
@@ -42,7 +43,6 @@ def _utcnow() -> datetime:
 
 
 def _md(title: str, data: dict[str, Any]) -> str:
-    """Renderiza um dict de estágio como Markdown legível."""
     lines: list[str] = [f"# {title}", ""]
     for key, value in data.items():
         lines.append(f"## {key}")
@@ -55,7 +55,7 @@ def _md(title: str, data: dict[str, Any]) -> str:
 
 
 class ValidatePipeline:
-    """Orquestra os 7 estágios do Modo VALIDATE."""
+    """Orquestra os 7 estágios do Modo VALIDATE com erros detalhados."""
 
     def __init__(
         self,
@@ -94,6 +94,23 @@ class ValidatePipeline:
         artifact = self._artifacts.save_artifact(state.mission_id, name, content)
         state.artifacts.append(artifact)
 
+    async def _run_stage(
+        self,
+        on_stage: Optional[StageCallback],
+        index: int,
+        label: str,
+        agent_name: str,
+        coro: Coroutine[Any, Any, Any],
+    ) -> Any:
+        """Executa um agente com try/except detalhado (log + propagação)."""
+        self._emit(on_stage, index, label)
+        try:
+            return await coro
+        except Exception as exc:
+            msg = f"{type(exc).__name__}: {exc}"
+            console.print(f"[bold yellow]⚠️  Erro no estágio {agent_name}: {msg}[/bold yellow]")
+            raise
+
     def _save_failure_report(self, state: MissionState, error_msg: str) -> None:
         failure = (
             "# Validation Report (FALHA)\n\n"
@@ -112,8 +129,8 @@ class ValidatePipeline:
         on_stage: Optional[StageCallback] = None,
     ) -> MissionState:
         state = MissionState(
-            mission_id=__import__("uuid").uuid4().hex,
-            project_id=__import__("uuid").uuid4().hex,
+            mission_id=uuid.uuid4().hex,
+            project_id=uuid.uuid4().hex,
             mode=ProjectMode.VALIDATE,
             status=MissionStatus.IN_PROGRESS,
             current_stage="init",
@@ -122,45 +139,52 @@ class ValidatePipeline:
 
         try:
             # 1 — Idea Intake
-            self._emit(on_stage, 1, "Normalizing Idea...")
-            idea_profile = await self._intake.analyze(request.model_dump())
+            idea_profile = await self._run_stage(
+                on_stage, 1, "Normalizing Idea...", "IdeaIntakeAgent",
+                self._intake.analyze(request.model_dump()),
+            )
             self._save(state, "idea_profile.json",
                        json.dumps(idea_profile, indent=2, ensure_ascii=False))
             state.mode_payload["idea_profile"] = idea_profile
             self._advance(state, "idea_intake")
 
             # 2 — Problem & Market
-            self._emit(on_stage, 2, "Assessing Problem & Market...")
-            problem_market = await self._problem.analyze(idea_profile)
+            problem_market = await self._run_stage(
+                on_stage, 2, "Assessing Problem & Market...", "ProblemMarketAgent",
+                self._problem.analyze(idea_profile),
+            )
             self._save(state, "market_problem.md", _md("Problem & Market", problem_market))
             state.mode_payload["problem_market"] = problem_market
             self._advance(state, "problem_market")
 
             # 3 — Competitors
-            self._emit(on_stage, 3, "Mapping Competitors...")
-            competitors = await self._competitor.analyze(idea_profile, problem_market)
+            competitors = await self._run_stage(
+                on_stage, 3, "Mapping Competitors...", "CompetitorAgent",
+                self._competitor.analyze(idea_profile, problem_market),
+            )
             self._save(state, "competitors.md", _md("Competitive Landscape", competitors))
             state.mode_payload["competitors"] = competitors
             self._advance(state, "competitors")
 
             # 4 — Technical Feasibility
-            self._emit(on_stage, 4, "Evaluating Technical Feasibility...")
-            tech = await self._tech.analyze(idea_profile, problem_market, competitors)
-            self._save(state, "technical_feasibility.md",
-                       _md("Technical Feasibility", tech))
+            tech = await self._run_stage(
+                on_stage, 4, "Evaluating Technical Feasibility...", "TechnicalFeasibilityAgent",
+                self._tech.analyze(idea_profile, problem_market, competitors),
+            )
+            self._save(state, "technical_feasibility.md", _md("Technical Feasibility", tech))
             state.mode_payload["technical_feasibility"] = tech
             self._advance(state, "technical_feasibility")
 
             # 5 — Contrarian Risk
-            self._emit(on_stage, 5, "Running Contrarian Risk Analysis...")
-            risks = await self._contrarian.analyze(
-                idea_profile, problem_market, competitors, tech
+            risks = await self._run_stage(
+                on_stage, 5, "Running Contrarian Risk Analysis...", "ContrarianRiskAgent",
+                self._contrarian.analyze(idea_profile, problem_market, competitors, tech),
             )
             self._save(state, "risks_contrarian.md", _md("Contrarian Risks", risks))
             state.mode_payload["risks_contrarian"] = risks
             self._advance(state, "risks_contrarian")
 
-            # Lacunas de evidência + hipóteses (derivadas)
+            # Lacunas de evidência + hipóteses
             evidence_gaps = list(idea_profile.get("gaps", [])) + list(
                 problem_market.get("inferences", [])
             )
@@ -170,24 +194,25 @@ class ValidatePipeline:
             ]
 
             # 6 — Experiment Design
-            self._emit(on_stage, 6, "Designing Experiments...")
-            exp = await self._experiments.analyze(idea_profile, problem_market, evidence_gaps)
+            exp = await self._run_stage(
+                on_stage, 6, "Designing Experiments...", "ExperimentDesignAgent",
+                self._experiments.analyze(idea_profile, problem_market, evidence_gaps),
+            )
             self._save(state, "experiments.md", _md("Validation Experiments", exp))
             state.mode_payload["experiments"] = exp["experiments"]
             self._advance(state, "experiments")
 
             # 7 — Synthesis
-            self._emit(on_stage, 7, "Synthesizing Verdict...")
             all_stages = {
-                "idea_profile": idea_profile,
-                "problem_market": problem_market,
-                "competitors": competitors,
-                "technical_feasibility": tech,
-                "risks_contrarian": risks,
-                "experiments": exp["experiments"],
+                "idea_profile": idea_profile, "problem_market": problem_market,
+                "competitors": competitors, "technical_feasibility": tech,
+                "risks_contrarian": risks, "experiments": exp["experiments"],
                 "evidence_gaps": evidence_gaps,
             }
-            rec = await self._synth.synthesize(all_stages)
+            rec = await self._run_stage(
+                on_stage, 7, "Synthesizing Verdict...", "ValidationSynthesizer",
+                self._synth.synthesize(all_stages),
+            )
             verdict = rec.get("verdict") or self._config.VALIDATE_DEFAULT_VERDICT_IF_UNCERTAIN
             rec["verdict"] = verdict
             state.mode_payload["recommendation"] = rec
@@ -202,6 +227,9 @@ class ValidatePipeline:
             error_msg = f"{type(exc).__name__}: {exc}"
             state.mode_payload["error"] = error_msg
             state.mode_payload["error_stage"] = state.current_stage
+            state.mode_payload["final_report"] = (
+                f"# Validation Report (FALHA)\n\n## Erro\n```\n{error_msg}\n```\n"
+            )
             self._save_failure_report(state, error_msg)
         finally:
             state.updated_at = _utcnow()

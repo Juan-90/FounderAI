@@ -1,17 +1,24 @@
 """
-Agentes especializados do pipeline VALIDATE (v4.4.0).
+Agentes especializados do pipeline VALIDATE (v4.4.0 + normalização tolerante).
 
-Cada agente encapsula uma chamada ao LLMClient com prompt estruturado e
-retorna um dict (não string) com os campos específicos de cada estágio.
-Usa o Protocol LLMBuildClient (já existente em build/agents.py).
+v4.4.0 hotfix 2: modelos de produção (Groq/local) podem OMITIR campos do schema.
+  • _apply_defaults(): preenche campos não-críticos ausentes (listas/textos) com
+    defaults seguros, mantendo o pipeline resiliente.
+  • Campos críticos (os cobertos pelos testes de contrato) permanecem obrigatórios.
+  • Prompts reforçados com "inclua TODAS as chaves, mesmo que vazias".
 """
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+import json
+from typing import Any
 
 from backend.build.agents import LLMBuildClient
-from backend.core.llm_client import LLMClient
+from backend.core.llm_client import (
+    LLMClient,
+    _clean_json,
+    _sanitize_json_for_parse,
+)
 
 
 class ValidateAgentError(Exception):
@@ -21,8 +28,39 @@ class ValidateAgentError(Exception):
 _SYSTEM: str = (
     "Você é um consultor sênior de validação de produtos do FounderAI. "
     "Analise com rigor, separe evidência de inferência e seja específico. "
-    "Responda APENAS com JSON válido, sem fences, sem texto extra."
+    "Responda APENAS com JSON válido, sem fences, sem texto extra. "
+    "Inclua TODAS as chaves solicitadas, mesmo que com listas/textos vazios."
 )
+
+
+def _to_dict(raw: Any) -> dict[str, Any]:
+    """Converte a resposta do LLM em dict, tolerando Markdown/JSON malformatado."""
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        cleaned = _sanitize_json_for_parse(_clean_json(raw))
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+    raise ValidateAgentError(
+        "Resposta do LLM não pôde ser interpretada como objeto JSON."
+    )
+
+
+async def _call_json(client: Any, user_prompt: str) -> dict[str, Any]:
+    """Chama o método de JSON com fallback quando disponível (await interno)."""
+    method = getattr(client, "complete_json_with_fallback", client.complete_json)
+    return await method(system_prompt=_SYSTEM, user_prompt=user_prompt)
+
+
+def _apply_defaults(data: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
+    """Preenche campos não-críticos ausentes com defaults seguros."""
+    for key, value in defaults.items():
+        data.setdefault(key, value)
+    return data
 
 
 def _require_keys(data: dict[str, Any], required: list[str], agent: str) -> None:
@@ -34,17 +72,7 @@ def _require_keys(data: dict[str, Any], required: list[str], agent: str) -> None
 
 
 class IdeaIntakeAgent:
-    """
-    Estágio 1/7 — Normaliza a ideia e extrai premissas/lacunas.
-
-    Saída:
-        {
-          "summary": str,
-          "assumptions": list[str],
-          "gaps": list[str],
-          "clarified_fields": dict[str, str | None]
-        }
-    """
+    """Estágio 1/7 — Normaliza a ideia e extrai premissas/lacunas. (estrito)"""
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
@@ -59,26 +87,18 @@ class IdeaIntakeAgent:
             '"solution": ..., "business_model": ..., "constraints": ...}}\n'
             "Cada campo de clarified_fields usa o valor do fundador ou null se ausente."
         )
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
+        data = _to_dict(await _call_json(self._client, user))
         _require_keys(data, ["summary", "assumptions", "gaps", "clarified_fields"],
                       "IdeaIntakeAgent")
         return data
 
 
 class ProblemMarketAgent:
-    """
-    Estágio 2/7 — Avalia dor, gravidade, público e distingue evidência vs inferência.
+    """Estágio 2/7 — Dor, gravidade, público; evidência vs inferência. (tolerante)"""
 
-    Saída:
-        {
-          "pain_description": str,
-          "pain_severity": "low" | "medium" | "high" | "critical",
-          "audience_segment": str,
-          "evidence": list[str],
-          "inferences": list[str],
-          "market_size_hint": str
-        }
-    """
+    _DEFAULTS = {"evidence": [], "inferences": [], "market_size_hint": "",
+                 "audience_segment": ""}
+    _REQUIRED = ["pain_description", "pain_severity"]
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
@@ -91,35 +111,21 @@ class ProblemMarketAgent:
             '{"pain_description": "...", "pain_severity": "low|medium|high|critical", '
             '"audience_segment": "...", "evidence": ["fato conhecido"], '
             '"inferences": ["hipótese não comprovada"], "market_size_hint": "..."}\n'
-            "Separe RIGOROSAMENTE o que é evidência do que é inferência."
+            "Inclua TODAS as chaves. Separe RIGOROSAMENTE evidência de inferência."
         )
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
-        _require_keys(
-            data,
-            ["pain_description", "pain_severity", "audience_segment",
-             "evidence", "inferences", "market_size_hint"],
-            "ProblemMarketAgent",
-        )
+        data = _apply_defaults(_to_dict(await _call_json(self._client, user)), self._DEFAULTS)
+        _require_keys(data, self._REQUIRED, "ProblemMarketAgent")
         if data.get("pain_severity") not in ("low", "medium", "high", "critical"):
-            raise ValidateAgentError(
-                "ProblemMarketAgent: pain_severity inválido."
-            )
+            raise ValidateAgentError("ProblemMarketAgent: pain_severity inválido.")
         return data
 
 
 class CompetitorAgent:
-    """
-    Estágio 3/7 — Mapeia concorrentes, alternativas (incluindo planilhas/status quo)
-    e diferenciais.
+    """Estágio 3/7 — Concorrentes, alternativas e diferenciais. (tolerante)"""
 
-    Saída:
-        {
-          "direct_competitors": [{"name": str, "differentiator": str}, ...],
-          "indirect_alternatives": [{"name": str, "why_used": str}, ...],
-          "status_quo": str,
-          "our_differentiators": list[str]
-        }
-    """
+    _DEFAULTS = {"direct_competitors": [], "indirect_alternatives": [],
+                 "our_differentiators": [], "status_quo": ""}
+    _REQUIRED = ["status_quo"]
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
@@ -134,31 +140,18 @@ class CompetitorAgent:
             '{"direct_competitors": [{"name": "...", "differentiator": "..."}], '
             '"indirect_alternatives": [{"name": "...", "why_used": "..."}], '
             '"status_quo": "...", "our_differentiators": ["..."]}\n'
-            "Considere planilhas, processos manuais e status quo como alternativas válidas."
+            "Inclua TODAS as chaves. Considere planilhas/status quo como alternativas."
         )
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
-        _require_keys(
-            data,
-            ["direct_competitors", "indirect_alternatives",
-             "status_quo", "our_differentiators"],
-            "CompetitorAgent",
-        )
+        data = _apply_defaults(_to_dict(await _call_json(self._client, user)), self._DEFAULTS)
+        _require_keys(data, self._REQUIRED, "CompetitorAgent")
         return data
 
 
 class TechnicalFeasibilityAgent:
-    """
-    Estágio 4/7 — Avalia complexidade, dados, riscos de IA e MVP técnico (sem gerar código).
+    """Estágio 4/7 — Complexidade, dados, riscos de IA, MVP técnico. (tolerante)"""
 
-    Saída:
-        {
-          "complexity": "low" | "medium" | "high" | "extreme",
-          "data_requirements": list[str],
-          "ai_risks": list[str],
-          "technical_mvp_outline": str,
-          "effort_weeks_estimate": int
-        }
-    """
+    _DEFAULTS = {"data_requirements": [], "ai_risks": [], "technical_mvp_outline": ""}
+    _REQUIRED = ["complexity", "effort_weeks_estimate"]
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
@@ -177,15 +170,10 @@ class TechnicalFeasibilityAgent:
             '{"complexity": "low|medium|high|extreme", '
             '"data_requirements": ["..."], "ai_risks": ["..."], '
             '"technical_mvp_outline": "...", "effort_weeks_estimate": <int>}\n'
-            "effort_weeks_estimate deve ser inteiro (1..52)."
+            "Inclua TODAS as chaves. effort_weeks_estimate deve ser inteiro (1..52)."
         )
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
-        _require_keys(
-            data,
-            ["complexity", "data_requirements", "ai_risks",
-             "technical_mvp_outline", "effort_weeks_estimate"],
-            "TechnicalFeasibilityAgent",
-        )
+        data = _apply_defaults(_to_dict(await _call_json(self._client, user)), self._DEFAULTS)
+        _require_keys(data, self._REQUIRED, "TechnicalFeasibilityAgent")
         if not isinstance(data.get("effort_weeks_estimate"), int):
             raise ValidateAgentError(
                 "TechnicalFeasibilityAgent: effort_weeks_estimate deve ser int."
@@ -194,19 +182,11 @@ class TechnicalFeasibilityAgent:
 
 
 class ContrarianRiskAgent:
-    """
-    Estágio 5/7 — Papel estritamente cético: riscos regulatórios, falsos positivos,
-    custos ocultos. Deve procurar razões para NÃO construir.
+    """Estágio 5/7 — Cético estrito: riscos, falsos positivos, custos. (tolerante)"""
 
-    Saída:
-        {
-          "regulatory_risks": list[str],
-          "false_positive_risks": list[str],
-          "hidden_costs": list[str],
-          "reasons_to_kill": list[str],
-          "skeptic_score": int
-        }
-    """
+    _DEFAULTS = {"regulatory_risks": [], "false_positive_risks": [],
+                 "hidden_costs": [], "reasons_to_kill": []}
+    _REQUIRED = ["skeptic_score"]
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
@@ -227,15 +207,10 @@ class ContrarianRiskAgent:
             '{"regulatory_risks": ["..."], "false_positive_risks": ["..."], '
             '"hidden_costs": ["..."], "reasons_to_kill": ["..."], '
             '"skeptic_score": <int de 1 a 10, onde 10 = altíssimo ceticismo>}.\n'
-            "O papel deste agente é o devil's advocate; não suavize críticas."
+            "Inclua TODAS as chaves. Não suavize críticas."
         )
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
-        _require_keys(
-            data,
-            ["regulatory_risks", "false_positive_risks", "hidden_costs",
-             "reasons_to_kill", "skeptic_score"],
-            "ContrarianRiskAgent",
-        )
+        data = _apply_defaults(_to_dict(await _call_json(self._client, user)), self._DEFAULTS)
+        _require_keys(data, self._REQUIRED, "ContrarianRiskAgent")
         score = data.get("skeptic_score")
         if not isinstance(score, int) or not (1 <= score <= 10):
             raise ValidateAgentError(
@@ -245,23 +220,7 @@ class ContrarianRiskAgent:
 
 
 class ExperimentDesignAgent:
-    """
-    Estágio 6/7 — Propõe 3 a 7 experimentos práticos (hipótese, método, métrica, go/no-go).
-
-    Saída:
-        {
-          "experiments": [
-            {
-              "hypothesis": str,
-              "method": str,
-              "metric": str,
-              "go_threshold": str,
-              "estimated_cost_days": int
-            },
-            ...
-          ]
-        }
-    """
+    """Estágio 6/7 — Propõe 3 a 7 experimentos práticos. (estrito)"""
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
@@ -282,7 +241,7 @@ class ExperimentDesignAgent:
             '"go_threshold": "...", "estimated_cost_days": <int>}]}.\n'
             "Cada experimento deve atacar uma lacuna de evidência específica."
         )
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
+        data = _to_dict(await _call_json(self._client, user))
         if not isinstance(data, dict) or "experiments" not in data:
             raise ValidateAgentError("ExperimentDesignAgent: campo 'experiments' ausente.")
         experiments = data["experiments"]
@@ -304,19 +263,7 @@ class ExperimentDesignAgent:
 
 
 class ValidationSynthesizer:
-    """
-    Estágio 7/7 — Consolida o veredito final (INVESTIGATE/BUILD/PIVOT/DISCARD),
-    confiança, rationale e condições.
-
-    Saída:
-        {
-          "verdict": "INVESTIGATE" | "BUILD" | "PIVOT" | "DISCARD",
-          "confidence": float,
-          "rationale": str,
-          "conditions": list[str],
-          "final_report": str
-        }
-    """
+    """Estágio 7/7 — Consolida veredito, confiança, rationale e condições. (estrito)"""
 
     _VALID_VERDICTS = {"INVESTIGATE", "BUILD", "PIVOT", "DISCARD"}
 
@@ -335,9 +282,9 @@ class ValidationSynthesizer:
             "• BUILD:     validado o suficiente para entrar em BUILD Mode.\n"
             "• PIVOT:     problema real, mas solução/segmento errado.\n"
             "• DISCARD:   premissas fracas demais; abandone a ideia.\n"
-            "confidence deve refletir o quanto as evidências suportam o veredito."
+            "Inclua TODAS as chaves. confidence reflete o suporte das evidências."
         )
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
+        data = _to_dict(await _call_json(self._client, user))
         _require_keys(
             data,
             ["verdict", "confidence", "rationale", "conditions", "final_report"],

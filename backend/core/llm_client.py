@@ -322,6 +322,19 @@ class LLMClient:
             )
         return parsed
 
+        # ── Aliases explícitos (v4.4.0) ─────────────────────────────────────────
+    # Deixam claro que complete/complete_json JÁ incluem fallback Cloud→Local,
+    # retry/backoff em HTTP transitório e timeout por provedor (local ≥ 120s).
+    async def complete_with_fallback(
+        self, system_prompt, user_prompt, model=None, role=None
+    ) -> str:
+        return await self.complete(system_prompt, user_prompt, model, role)
+
+    async def complete_json_with_fallback(
+        self, system_prompt, user_prompt, model=None, role=None
+    ) -> dict[str, Any]:
+        return await self.complete_json(system_prompt, user_prompt, model, role)
+
     def _http_client(self, timeout: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=timeout, transport=self._transport)
 
