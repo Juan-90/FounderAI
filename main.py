@@ -1,11 +1,12 @@
 """
-Fundador IA v4.3.0 — CLI Principal (Council multi-turno + Modo BUILD Web/Game).
+Fundador IA v4.4.0 — CLI Principal (Council + BUILD + VALIDATE).
 
 Uso:
     python main.py                              Menu interativo
     python main.py "Missão"                     Deliberação direta
     python main.py build "Intent"               Modo BUILD (Web por default)
     python main.py build "Intent" --type GAME   Modo BUILD (Jogo 2D)
+    python main.py validate "Intent" [-f arq]   Modo VALIDATE (v4.4.0)
     python main.py --last / --rerun ID / --history
 """
 
@@ -33,13 +34,14 @@ _CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 class _RichHelpFormatter(argparse.HelpFormatter):
     def format_help(self) -> str:
         return (
-            "\n  🏛  Fundador IA v4.3.0 — Conselho Consultivo Artificial\n"
+            "\n  🏛  Fundador IA v4.4.0 — Conselho Consultivo Artificial\n"
             "  ─────────────────────────────────────────────────────\n\n"
             + super().format_help()
             + "\n  Exemplos:\n"
             "    python main.py \"Criar app de finanças para MEIs\"\n"
             "    python main.py build \"Quero um sistema de agendamento para minha barbearia\"\n"
             "    python main.py build \"Jogo 2D de nave vs asteroides\" --type GAME\n"
+            "    python main.py validate \"Quero validar o EcoTrack-IA...\" -f research.md\n"
             "    python main.py --last\n"
             "    python main.py --history -n 10\n"
         )
@@ -48,18 +50,18 @@ class _RichHelpFormatter(argparse.HelpFormatter):
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python main.py",
-        description="Avalia missões de produto e constrói MVPs via Conselho/Build.",
+        description="Avalia, constrói e valida missões de produto via IA.",
         formatter_class=_RichHelpFormatter,
         add_help=True,
     )
     parser.add_argument("mission", nargs="?", default=None,
-                        help="Texto da missão, ou 'build' para o Modo BUILD.")
+                        help="'build', 'validate', ou o texto da missão de deliberação.")
     parser.add_argument("build_intent", nargs="?", default=None,
-                        help="Intent do projeto (usar com: python main.py build \"...\").")
+                        help="Intent do projeto (usar com build/validate).")
     parser.add_argument("-f", "--file", action="append", dest="files", default=[],
                         metavar="ARQUIVO", help="Arquivo de contexto (repetível).")
     parser.add_argument("--project-name", default=None, dest="project_name",
-                        metavar="NOME", help="Nome do projeto no Modo BUILD (default: inferido do tipo/intent).")
+                        metavar="NOME", help="Nome do projeto no Modo BUILD.")
     parser.add_argument("--type", default=None, dest="project_type",
                         choices=["WEB_APP", "INTERNAL_SYSTEM", "GAME"],
                         metavar="TIPO", help="Tipo de projeto no Modo BUILD.")
@@ -83,11 +85,11 @@ def _interactive_menu() -> argparse.Namespace:
     ns = argparse.Namespace(
         mission=None, build_intent=None, files=[], history=False,
         history_limit=5, last=False, rerun=None,
-        project_name="BarbeariaApp", project_type=None,
+        project_name=None, project_type=None,
     )
     console.print()
     console.print(Panel(
-        "[bold cyan]Fundador IA v4.3.0[/bold cyan] — Conselho Consultivo Artificial\n\n"
+        "[bold cyan]Fundador IA v4.4.0[/bold cyan] — Conselho Consultivo Artificial\n\n"
         "  [bold][1][/bold]  Nova Missão\n"
         "  [bold][2][/bold]  Reexecutar Última Deliberação\n"
         "  [bold][3][/bold]  Ver Histórico de Decisões\n"
@@ -254,7 +256,7 @@ def _render_header(mission: str, included_files: list[str]) -> None:
     console.print(Panel(
         f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
         f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{context_info}",
-        title="[bold cyan]🏛  Fundador IA v4.3.0[/bold cyan]", border_style="cyan", padding=(1, 2),
+        title="[bold cyan]🏛  Fundador IA v4.4.0[/bold cyan]", border_style="cyan", padding=(1, 2),
     ))
     console.print()
 
@@ -472,6 +474,12 @@ async def main() -> None:
         code = await run_build_mode(
             args.build_intent or "", project_name=args.project_name, project_type=ptype,
         )
+        sys.exit(code)
+
+    # ── Modo VALIDATE (v4.4.0) ──
+    if args.mission == "validate":
+        from backend.validate.cli import run_validate_mode
+        code = await run_validate_mode(args.build_intent or "", context_files=args.files)
         sys.exit(code)
 
     if args.last or args.rerun:

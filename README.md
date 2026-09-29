@@ -128,6 +128,19 @@ O tipo de projeto seleciona o **Profile** (stack, arquivos, prompts e env):
 ```bash
 python main.py build "Quero um sistema de agendamento para minha barbearia"
 
+
+## 🔍 Modo VALIDATE (v4.4.0)
+
+Valida se uma ideia **merece ser construída** antes de gastar ciclos de código, em
+7 estágios analíticos (intake → problema/mercado → concorrentes → viabilidade
+técnica → risco contrarian → experimentos → síntese).
+
+**Executar:**
+```bash
+python main.py validate "Quero validar o EcoTrack-IA: um sistema de rastreamento ambiental..."
+python main.py validate "Sua ideia aqui" -f research.md -f dados.csv
+
+
 ## 🧪 Como Executar a Suíte Total de Testes
 
 **Execução padrão (162 testes; testes de LLM real skipam graciosamente):**

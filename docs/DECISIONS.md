@@ -852,3 +852,46 @@ stack própria (pygame) e execução **headless** em CI/sandbox (sem display rea
 ## Fora de escopo (v4.3.0)
 - Render/áudio reais do jogo em sandbox com display.
 - Modos VALIDATE / DISCOVER / IMPROVE.
+
+
+# ADR-012 — Validate Mode Pipeline (v4.4.0)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+O FounderAI v4.2/v4.3 constrói MVPs (BUILD), mas não tinha um caminho dedicado a
+**validar se uma ideia merece ser construída** antes de gastar ciclos de código.
+A v4.4.0 introduz o Modo VALIDATE (Path C / EcoTrack-IA): um pipeline analítico
+de 7 estágios que separa evidência de inferência e emite um veredito acionável.
+
+## Decisão
+1. **7 agentes especializados** (`backend/validate/agents.py`), cada um com contrato
+   JSON estrito e validação de ranges: IdeaIntake, ProblemMarket, Competitor,
+   TechnicalFeasibility, ContrarianRisk, ExperimentDesign, ValidationSynthesizer.
+2. **Orquestrador `ValidatePipeline`** executa os estágios em sequência, preenche
+   `MissionState.mode_payload` via `ValidatePayload.build()` e persiste 8 artefatos
+   em `artifacts/validate/<mission_id>/` (idea_profile.json, 6 .md, mission_state.json).
+3. **Veredito** ∈ {INVESTIGATE, BUILD, PIVOT, DISCARD} com confiança [0,1];
+   `VALIDATE_DEFAULT_VERDICT_IF_UNCERTAIN=INVESTIGATE` como fallback seguro.
+4. **Ceticismo obrigatório:** ContrarianRiskAgent atua como devil's advocate
+   (skeptic_score 1-10) para contrabalançar otimismo do fundador.
+5. **Experimentos** limitados a 3-7, cada um atacando uma lacuna de evidência
+   (hipótese/método/métrica/go-threshold/custo), derivadas de gaps+inferences.
+6. **Falha graciosa:** exceção em qualquer estágio → status FAILED +
+   validation_report.md de falha + mission_state.json sempre persistidos.
+
+## Consequências
+- Positivas: decisão de BUILD baseada em evidência; trilha de auditoria completa;
+  reuso de ArtifactManager/LLMBuildClient (DRY); CI coberto sem Docker/LLM real.
+- Negativas: 7 chamadas de LLM por validação (latência/custo); qualidade do
+  veredito depende da qualidade dos prompts e do modelo.
+
+## Alternativas rejeitadas
+- Validar dentro do BUILD Mode (acopla análise e geração; piora o custo de ideias ruins).
+- Veredito binário GO/NO-GO (perde a nuance INVESTIGATE/PIVOT, essencial para PMEs).
+
+## Fora de escopo (v4.4.0)
+- Execução automática dos experimentos propostos.
+- Integração do veredito BUILD com o BuildPipeline (transição VALIDATE→BUILD).
