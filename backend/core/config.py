@@ -1,5 +1,5 @@
 """
-Configurações centrais do FounderAI (v4.4.0 — VALIDATE Mode).
+Configurações centrais do FounderAI (v4.5.0 — VALIDATE_AND_BUILD).
 """
 
 from __future__ import annotations
@@ -71,10 +71,16 @@ class Settings(BaseSettings):
     BUILD_GAME_ENGINE: str = "pygame"
     BUILD_GAME_HEADLESS: bool = True
 
-    # ── v4.4.0 — VALIDATE Mode (Path C / EcoTrack-IA) ──
+    # ── v4.4.0 — VALIDATE Mode (Path C) ──
     VALIDATE_MODE_ENABLED: bool = True
     VALIDATE_ARTIFACTS_DIR: str = "artifacts/validate"
     VALIDATE_DEFAULT_VERDICT_IF_UNCERTAIN: str = "INVESTIGATE"
+
+    # ── v4.5.0 — VALIDATE_AND_BUILD (Ponte Direta) ──
+    VALIDATE_AND_BUILD_ENABLED: bool = True
+    VAB_REQUIRE_HUMAN_CONFIRMATION: bool = True
+    VAB_MIN_CONFIDENCE_TO_AUTOBUILD: float = 0.75
+    VAB_ARTIFACTS_DIR: str = "artifacts/validate_and_build"
 
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
@@ -141,7 +147,6 @@ class Settings(BaseSettings):
         return models[provider]
 
     def timeout_for(self, provider: ProviderName) -> float:
-        """Timeout por provedor: local usa teto maior (codegen lento em CPU)."""
         if provider == "local":
             return max(self.LLM_LOCAL_TIMEOUT_SECONDS, 120.0)
         return self.LLM_TIMEOUT_SECONDS

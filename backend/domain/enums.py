@@ -1,5 +1,5 @@
 """
-Enums de domínio do FounderAI v4.2.0 (BUILD Mode).
+Enums de domínio do FounderAI (v4.5.0 — +VALIDATE_AND_BUILD).
 """
 
 from __future__ import annotations
@@ -9,10 +9,11 @@ from enum import Enum
 
 class ProjectMode(str, Enum):
     """Modo de operação do projeto."""
-    BUILD    = "BUILD"
-    VALIDATE = "VALIDATE"
-    DISCOVER = "DISCOVER"
-    IMPROVE  = "IMPROVE"
+    BUILD              = "BUILD"
+    VALIDATE           = "VALIDATE"
+    VALIDATE_AND_BUILD = "VALIDATE_AND_BUILD"
+    DISCOVER           = "DISCOVER"
+    IMPROVE            = "IMPROVE"
 
 
 class ProjectType(str, Enum):
@@ -23,7 +24,7 @@ class ProjectType(str, Enum):
 
 
 class DeploymentStrategy(str, Enum):
-    """Estratégia de deploy (v4.2.0: apenas PRIVATE)."""
+    """Estratégia de deploy (v4.2: apenas PRIVATE)."""
     PRIVATE = "PRIVATE"
 
 
