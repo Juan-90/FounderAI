@@ -118,15 +118,15 @@ No prompt de esclarecimento: digite `cancel`, `abort` ou `/cancel`, **ou** press
 Resumo exibido antes da deliberação, ex.:
 `📁 Contexto: 3 arquivo(s) incluído(s), 1 truncado(s), 0 omitido(s)`.
 
-## 🏗️ Modo BUILD (v4.2.0)
+## 🏗️ Modo BUILD (v4.2 Web / v4.3 Game)
 
 Transforma uma intenção de produto em um MVP executável e validado, em 6 estágios
 (Requirements → Architecture → Implementation → Quality Gate → Sandbox/TDD → Report).
+O tipo de projeto seleciona o **Profile** (stack, arquivos, prompts e env):
 
-**Executar:**
+**Web/SaaS (default):**
 ```bash
 python main.py build "Quero um sistema de agendamento para minha barbearia"
-python main.py build "Sua intent aqui" --project-name MeuApp
 
 ## 🧪 Como Executar a Suíte Total de Testes
 

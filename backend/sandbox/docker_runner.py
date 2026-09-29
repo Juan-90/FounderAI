@@ -1,14 +1,11 @@
 """
-DockerSandboxRunner — execução efêmera e hardenizada (v4.0 + v4.1.0 telemetry).
+DockerSandboxRunner — execução efêmera hardenizada + telemetria + env (v4.3).
 
-Mudança v4.1.0: flag --rm removida para permitir coleta de stats via
-`docker stats --no-stream` antes do force-remove no finally.
-A semântica de cleanup permanece idêntica (docker rm -f no finally).
+v4.3: aceita SandboxInput.env e injeta via `docker run -e K=V` (headless SDL).
 """
 
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 import tempfile
@@ -38,37 +35,25 @@ _HARDENING_FLAGS: Final[tuple[str, ...]] = (
     "--cpus=1.0",
 )
 
-# Regex para parse de valores docker stats (ex: "45.23%", "125.4MiB")
 _CPU_RE = re.compile(r"([\d.]+)%")
 _MEM_RE = re.compile(r"([\d.]+)([KMGTP]?i?B)")
 _MEM_UNITS: Final[dict[str, float]] = {
-    "B": 1.0,
-    "KB": 1024.0,
-    "KIB": 1024.0,
-    "MB": 1024.0 ** 2,
-    "MIB": 1024.0 ** 2,
-    "GB": 1024.0 ** 3,
-    "GIB": 1024.0 ** 3,
+    "B": 1.0, "KB": 1024.0, "KIB": 1024.0,
+    "MB": 1024.0 ** 2, "MIB": 1024.0 ** 2,
+    "GB": 1024.0 ** 3, "GIB": 1024.0 ** 3,
 }
 
 
 class DockerSandboxRunner(SandboxRunner):
-    """Runner de sandbox com coleta de telemetria best-effort."""
+    """Runner de sandbox com telemetria e injeção de env best-effort."""
 
-    def __init__(
-        self,
-        config: Settings | None = None,
-        docker_bin: str = "docker",
-    ) -> None:
+    def __init__(self, config: Settings | None = None, docker_bin: str = "docker") -> None:
         self._config: Settings = config if config is not None else settings
         self._docker: str = docker_bin
 
-    # ── Probes ──
     def is_available(self) -> bool:
         try:
-            probe = subprocess.run(
-                [self._docker, "info"], capture_output=True, timeout=10
-            )
+            probe = subprocess.run([self._docker, "info"], capture_output=True, timeout=10)
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
             return False
         return probe.returncode == 0
@@ -86,7 +71,6 @@ class DockerSandboxRunner(SandboxRunner):
     def _image(self) -> str:
         return self._config.SANDBOX_IMAGE or _IMAGE_TAG_FALLBACK
 
-    # ── Helpers ──
     @staticmethod
     def _safe_relpath(rel: str) -> Path:
         if not rel or not rel.strip():
@@ -109,22 +93,18 @@ class DockerSandboxRunner(SandboxRunner):
             target.write_text(content, encoding="utf-8")
 
     def _base_argv(self, container_name: str, volume_src: str) -> list[str]:
-        # --rem removido em v4.1.0: permite coleta de stats antes do rm -f
+        """argv até workdir (imagem e env são acrescentados pelo caller)."""
         return [
             self._docker, "run",
             *_HARDENING_FLAGS,
             "--name", container_name,
             "--volume", f"{volume_src}:{_CONTAINER_WORKDIR}",
             "--workdir", _CONTAINER_WORKDIR,
-            self._image(),
         ]
 
     def _force_remove(self, container_name: str) -> None:
         try:
-            subprocess.run(
-                [self._docker, "rm", "-f", container_name],
-                capture_output=True, timeout=15,
-            )
+            subprocess.run([self._docker, "rm", "-f", container_name], capture_output=True, timeout=15)
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
             pass
 
@@ -135,23 +115,14 @@ class DockerSandboxRunner(SandboxRunner):
             return None
         num = float(match.group(1))
         unit = match.group(2).upper()
-        bytes_total = num * _MEM_UNITS.get(unit, 1.0)
-        return bytes_total / (1024.0 ** 2)
+        return num * _MEM_UNITS.get(unit, 1.0) / (1024.0 ** 2)
 
     def _collect_stats(self, container_name: str) -> dict:
-        """Coleta best-effort de stats do container. Nunca lança."""
-        result: dict = {
-            "ram_peak_mb": None,
-            "cpu_percent_avg": None,
-            "cpu_percent_max": None,
-        }
+        result: dict = {"ram_peak_mb": None, "cpu_percent_avg": None, "cpu_percent_max": None}
         try:
             proc = subprocess.run(
-                [
-                    self._docker, "stats", "--no-stream",
-                    "--format", "{{.CPUPerc}}\t{{.MemUsage}}",
-                    container_name,
-                ],
+                [self._docker, "stats", "--no-stream", "--format",
+                 "{{.CPUPerc}}\t{{.MemUsage}}", container_name],
                 capture_output=True, text=True, timeout=5,
             )
             if proc.returncode != 0:
@@ -162,36 +133,26 @@ class DockerSandboxRunner(SandboxRunner):
                 parts = line.split("\t")
                 if len(parts) < 2:
                     continue
-                cpu_str, mem_str = parts[0], parts[1]
-                cpu_match = _CPU_RE.match(cpu_str.strip())
+                cpu_match = _CPU_RE.match(parts[0].strip())
                 if cpu_match:
                     cpu_val = float(cpu_match.group(1))
-                    result["cpu_percent_max"] = max(
-                        result["cpu_percent_max"] or 0.0, cpu_val
-                    )
-                    result["cpu_percent_avg"] = cpu_val  # uma amostra = avg = max
-                # mem_str formato: "125.4MiB / 512MiB"
-                mem_parts = mem_str.split("/", 1)
+                    result["cpu_percent_max"] = max(result["cpu_percent_max"] or 0.0, cpu_val)
+                    result["cpu_percent_avg"] = cpu_val
+                mem_parts = parts[1].split("/", 1)
                 if mem_parts:
                     mb = self._parse_mem_to_mb(mem_parts[0])
                     if mb is not None:
-                        result["ram_peak_mb"] = max(
-                            result["ram_peak_mb"] or 0.0, mb
-                        )
+                        result["ram_peak_mb"] = max(result["ram_peak_mb"] or 0.0, mb)
         except (subprocess.SubprocessError, OSError, ValueError):
-            pass  # best-effort: falha silenciosa
+            pass
         return result
 
-    # ── Interface pública ──
     def run(self, sbx_input: SandboxInput) -> SandboxOutput:
         for rel in sbx_input.files:
             self._safe_relpath(rel)
 
         if not self.is_available():
-            raise DockerUnavailableError(
-                "Daemon do Docker inacessível. "
-                "Verifique se o Docker Desktop/daemon está em execução."
-            )
+            raise DockerUnavailableError("Daemon do Docker inacessível.")
         if not self.image_exists():
             raise ImageNotFoundError(
                 f"Imagem '{self._image()}' não encontrada. Construa com: "
@@ -213,11 +174,12 @@ class DockerSandboxRunner(SandboxRunner):
             try:
                 self._write_files(root, sbx_input.files)
                 argv = self._base_argv(container_name, str(root))
+                for key, value in sbx_input.env.items():
+                    argv.extend(["-e", f"{key}={value}"])
+                argv.append(self._image())
                 argv.extend(sbx_input.command)
                 try:
-                    proc = subprocess.run(
-                        argv, capture_output=True, timeout=sbx_input.timeout_seconds,
-                    )
+                    proc = subprocess.run(argv, capture_output=True, timeout=sbx_input.timeout_seconds)
                     exit_code = proc.returncode
                     stdout_bytes = proc.stdout or b""
                     stderr_bytes = proc.stderr or b""
@@ -231,7 +193,6 @@ class DockerSandboxRunner(SandboxRunner):
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
             finally:
-                # Coleta best-effort de stats ANTES do force-remove
                 stats = self._collect_stats(container_name)
                 self._force_remove(container_name)
 
@@ -240,13 +201,9 @@ class DockerSandboxRunner(SandboxRunner):
         stderr, stderr_truncated = self._cap(stderr_bytes, sbx_input.max_output_bytes)
 
         return SandboxOutput(
-            exit_code=exit_code,
-            stdout=stdout,
-            stderr=stderr,
-            duration_ms=duration_ms,
-            timed_out=timed_out,
-            stdout_truncated=stdout_truncated,
-            stderr_truncated=stderr_truncated,
+            exit_code=exit_code, stdout=stdout, stderr=stderr,
+            duration_ms=duration_ms, timed_out=timed_out,
+            stdout_truncated=stdout_truncated, stderr_truncated=stderr_truncated,
             error=error,
             ram_peak_mb=stats["ram_peak_mb"],
             cpu_percent_avg=stats["cpu_percent_avg"],

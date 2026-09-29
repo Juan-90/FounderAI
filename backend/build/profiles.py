@@ -1,9 +1,7 @@
 """
-Project Profiles — especialização do Modo BUILD por tipo de produto (v4.3.0).
+Project Profiles — especialização do Modo BUILD por tipo de produto (v4.3).
 
-Cada profile encapsula stack, estrutura de arquivos, prompts de cada agente e
-variáveis de ambiente de execução, permitindo que o mesmo pipeline construa
-Web/SaaS ou Jogos 2D sem duplicar lógica de orquestração.
+v4.3: GameProfile headless injeta SDL_VIDEODRIVER/AUDIO=dummy + PYTHONUNBUFFERED=1.
 """
 
 from __future__ import annotations
@@ -14,23 +12,18 @@ from backend.domain.enums import ProjectType
 
 
 class BaseProjectProfile(ABC):
-    """Contrato de um perfil de projeto do Modo BUILD."""
-
     project_type: ProjectType
 
     @property
     @abstractmethod
-    def stack(self) -> list[str]:
-        """Tecnologias padrão do profile."""
+    def stack(self) -> list[str]: ...
 
     @property
     @abstractmethod
-    def file_structure(self) -> list[str]:
-        """Arquivos esperados no MVP."""
+    def file_structure(self) -> list[str]: ...
 
     @property
     def execution_env(self) -> dict[str, str]:
-        """Variáveis de ambiente para execução (default: nenhuma)."""
         return {}
 
     def test_command(self) -> list[str]:
@@ -47,8 +40,6 @@ class BaseProjectProfile(ABC):
 
 
 class WebAppProfile(BaseProjectProfile):
-    """Perfil Web/SaaS (FastAPI + SQLite + Uvicorn)."""
-
     project_type = ProjectType.WEB_APP
 
     @property
@@ -67,7 +58,7 @@ class WebAppProfile(BaseProjectProfile):
             "# Objetivo\n# Usuários\n# MVP\n"
             "  - Recursos CRUD / APIs\n  - Persistência\n  - Listagem\n  - Exclusão/Cancelamento\n"
             "# Restrições\n# Não-objetivos\n\n"
-            "Seja específico e mínimo (MVP). Não invente escopo fora das seções."
+            "Seja específico e mínimo (MVP)."
         )
 
     def architecture_prompt(self, requirements_md: str) -> str:
@@ -87,17 +78,19 @@ class WebAppProfile(BaseProjectProfile):
             f"{architecture_md}\n\n"
             "Gere código FastAPI + SQLite completo e executável, e testes pytest determinísticos.\n"
             'Formato da resposta: {"files": {...}, "test_files": {...}}\n'
-            "Regras: código completo (sem trechos), imports coerentes, testes sem rede."
+            "Regras: código completo, imports coerentes, testes sem rede."
         )
 
 
 class GameProfile(BaseProjectProfile):
-    """Perfil Jogo 2D (pygame), com execução headless para CI/sandbox."""
-
     project_type = ProjectType.GAME
 
     def __init__(self, headless: bool = True) -> None:
         self._headless = headless
+
+    @property
+    def headless(self) -> bool:
+        return self._headless
 
     @property
     def stack(self) -> list[str]:
@@ -111,7 +104,11 @@ class GameProfile(BaseProjectProfile):
     def execution_env(self) -> dict[str, str]:
         if not self._headless:
             return {}
-        return {"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy"}
+        return {
+            "SDL_VIDEODRIVER": "dummy",
+            "SDL_AUDIODRIVER": "dummy",
+            "PYTHONUNBUFFERED": "1",
+        }
 
     def requirements_prompt(self, intent: str) -> str:
         return (
@@ -143,14 +140,13 @@ class GameProfile(BaseProjectProfile):
             "ARQUITETURA:\n"
             f"{architecture_md}\n\n"
             "Gere código pygame completo e executável, MAIS testes pytest da LÓGICA "
-            "(movimento, colisão, pontuação) que NÃO exigem janela/Display.\n"
+            "(movimento, colisão, pontuação, game over) que NÃO exigem janela/Display.\n"
             'Formato da resposta: {"files": {...}, "test_files": {...}}\n'
             "Regras: lógica determinística separada da renderização; testes headless-safe."
         )
 
 
 def profile_for(project_type: ProjectType, headless: bool = True) -> BaseProjectProfile:
-    """Factory de profiles por tipo de projeto."""
     if project_type == ProjectType.GAME:
         return GameProfile(headless=headless)
     return WebAppProfile()

@@ -806,3 +806,49 @@ especializados e artefatos versionados em disco:
 ## Fora de escopo (v4.2.0)
 - Deploy automático (apenas `DeploymentStrategy.PRIVATE` definido).
 - Modos VALIDATE / DISCOVER / IMPROVE (enums reservados para v4.3+).
+
+
+# ADR-011 — Game Profile & Multi-Profile Build (v4.3.0)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+A v4.2 provou o Modo BUILD com um Web/SaaS (Barbearia). A v4.3 precisa construir
+um **segundo tipo de produto** (Jogo 2D) sem duplicar o pipeline. Jogos exigem
+stack própria (pygame) e execução **headless** em CI/sandbox (sem display real).
+
+## Decisão
+1. **Profiles como estratégia:** `BaseProjectProfile` encapsula stack, estrutura
+   de arquivos, prompts por agente e `execution_env`. `WebAppProfile` e
+   `GameProfile` são as duas implementações; `profile_for()` faz o dispatch por
+   `ProjectType`. O `BuildPipeline` recebe `project_type`/`profile` e repassa aos
+   agentes — a orquestração de 6 estágios permanece única.
+2. **Headless por env, não por código:** `GameProfile.execution_env` injeta
+   `SDL_VIDEODRIVER=dummy`, `SDL_AUDIODRIVER=dummy` e `PYTHONUNBUFFERED=1`.
+   A propagação é aditiva: `TDDRequest.env → SandboxInput.env → docker run -e`.
+   Nenhum provider/cloud é afetado.
+3. **Lógica separada da renderização:** os prompts do GameProfile exigem lógica
+   determinística testável **sem** `pygame.init`, para que os testes rodem na
+   sandbox (imagem tem apenas `pytest`, sem pygame/display).
+4. **`game_spec.json`:** para `ProjectType.GAME`, o pipeline persiste um spec
+   determinístico (engine, headless, file_structure, execution_env) como
+   artefato de auditoria.
+5. **Unificação de domínio (v4.3.0-etapa 1):** `MissionState` oficial vive em
+   `backend/domain/models.py`; `core.schemas` re-exporta (deprecado).
+
+## Consequências
+- Positivas: um único pipeline para N tipos de produto; jogos testáveis em CI
+  headless; trilha de auditoria por profile (`game_spec.json`).
+- Negativas: a imagem da sandbox não inclui pygame — jogos são validados pela
+  camada de lógica; validação visual/render fica para v4.4+ (imagem com pygame).
+
+## Alternativas rejeitadas
+- Pipeline separado por tipo de produto (duplicação de orquestração/estágios).
+- Instalar pygame na imagem agora (aumenta superfície e tempo de build sem
+  benefício para testes de lógica headless).
+
+## Fora de escopo (v4.3.0)
+- Render/áudio reais do jogo em sandbox com display.
+- Modos VALIDATE / DISCOVER / IMPROVE.

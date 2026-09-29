@@ -1,5 +1,5 @@
 """
-Schemas Pydantic V2 da Sandbox Isolada (v4.0 Fase A + v4.1.0 Telemetry).
+Schemas Pydantic V2 da Sandbox Isolada (v4.0 + v4.1 telemetry + v4.3 env).
 """
 
 from __future__ import annotations
@@ -19,38 +19,26 @@ class SandboxInput(BaseModel):
         ..., description="Comando como lista de strings. Ex: ['pytest', '-q']"
     )
     timeout_seconds: int = Field(default=20, ge=1, le=120)
-    max_output_bytes: int = Field(
-        default=1_048_576, description="Teto de output (1MB)"
+    max_output_bytes: int = Field(default=1_048_576, description="Teto de output (1MB)")
+    env: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Variáveis de ambiente injetadas no container (ex: SDL headless)",
     )
 
 
 class SandboxOutput(BaseModel):
-    """Resultado da execução isolada + telemetria de recursos (v4.1.0)."""
+    """Resultado da execução isolada + telemetria de recursos."""
 
-    exit_code: Optional[int] = Field(
-        default=None,
-        description="None para timeout ou erro de infraestrutura",
-    )
+    exit_code: Optional[int] = Field(default=None)
     stdout: str = Field(default="")
     stderr: str = Field(default="")
     duration_ms: int = Field(default=0)
     timed_out: bool = Field(default=False)
     stdout_truncated: bool = Field(default=False)
     stderr_truncated: bool = Field(default=False)
-    error: Optional[str] = Field(
-        default=None, description="Erros do Docker/infraestrutura"
-    )
+    error: Optional[str] = Field(default=None)
 
-    # ── v4.1.0 Telemetry (opcionais, coleta best-effort) ──
-    ram_peak_mb: Optional[float] = Field(
-        default=None, description="Pico de RAM em MB (via docker stats)"
-    )
-    cpu_percent_avg: Optional[float] = Field(
-        default=None, description="Média de uso de CPU (%)"
-    )
-    cpu_percent_max: Optional[float] = Field(
-        default=None, description="Pico de uso de CPU (%)"
-    )
-    container_id: Optional[str] = Field(
-        default=None, description="ID do container que executou o comando"
-    )
+    ram_peak_mb: Optional[float] = Field(default=None)
+    cpu_percent_avg: Optional[float] = Field(default=None)
+    cpu_percent_max: Optional[float] = Field(default=None)
+    container_id: Optional[str] = Field(default=None)

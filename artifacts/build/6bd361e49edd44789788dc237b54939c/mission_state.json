@@ -1,0 +1,33 @@
+{
+  "mission_id": "6bd361e49edd44789788dc237b54939c",
+  "project_id": "92364689bc3f4a02b677431326d2b88e",
+  "mode": "BUILD",
+  "status": "FAILED",
+  "current_stage": "architecture",
+  "mode_payload": {
+    "project_name": "BarbeariaApp",
+    "intent": "Quero um jogo 2D simples de nave atirando em asteroides",
+    "project_type": "GAME",
+    "error": "BuildAgentError: ImplementationAgent: LLM não retornou {'files': {...}} válido."
+  },
+  "artifacts": [
+    {
+      "id": "37cf699050074b00a8d4a06d2c9e1950",
+      "name": "requirements.md",
+      "type": "md",
+      "path": "6bd361e49edd44789788dc237b54939c/requirements.md",
+      "content": "# Jogo 2D MVP – Nave vs. Asteroides\n\n## Game Loop  \n- **Duração**: Cada partida dura **30–60 segundos**.  \n- **Loop**:  \n  1. Processar entrada do jogador.  \n  2. Atualizar posições de todas as entidades (player, asteroides, projéteis).  \n  3. Detectar colisões e aplicar efeitos (dano, destruição).  \n  4. Renderizar frame.  \n  5. Repetir até o tempo expirar ou condição de fim de jogo.\n\n## Entidades  \n| Entidade | Descrição | Atributos Principais |\n|----------|-----------|----------------------|\n| **Player** | Nave do jogador | posição (x, y), velocidade, vida (1 vida = 1 hit), sprite |\n| **Asteroid** | Obstáculo em movimento | posição (x, y), velocidade (direção aleatória), tamanho (pequeno/médio/grande), sprite |\n| **Projectile** | Tiro disparado pelo player | posição (x, y), velocidade (para cima), sprite |\n\n## Controles  \n- **Movimento**:  \n  - `←` / `→` (ou `A` / `D`) – mover nave horizontalmente.  \n- **Atirar**:  \n  - `Space` – dispara um projétil.  \n- **Pause** (opcional):  \n  - `Esc` – pausa/reinicia o jogo.\n\n## Win/Lose Condition  \n- **Win**: Jogador sobrevive até o fim do tempo (30–60 s).  \n- **Lose**: Nave colide com um asteroide (vida = 0).  \n- **Score**: (opcional) +1 ponto por cada asteroide destruído.\n\n## Restrições  \n- **Plataforma**: Web (HTML5 Canvas) ou desktop (SDL/Unity 2D).  \n- **Performance**: ≤ 60 fps em hardware padrão.  \n- **Assets**: Gráficos simples (sprites 32×32 ou 64×64), sons minimalistas.  \n- **Código**: Modular, com classes/objetos para cada entidade.  \n- **Testes**: Unitários mínimos para colisões e lógica de movimento.\n\n## Não‑objetivos  \n- Não incluir níveis, pontuação avançada ou power‑ups.  \n- Não implementar IA complexa ou física avançada (gravidade, drag).  \n- Não adicionar interface de usuário extensa (menus, configurações).  \n- Não usar recursos de rede ou multiplayer.  \n\n---  \n\n**Resumo**: Um jogo de 30–60 s onde o jogador controla uma nave que dispara projéteis para destruir asteroides que se movem aleatoriamente. O objetivo é sobreviver até o fim do tempo. O MVP deve ser jogável, simples e focado apenas nas mecânicas básicas descritas acima.",
+      "created_at": "2026-09-29T01:37:40.692289Z"
+    },
+    {
+      "id": "a3ab1afd1ba4405c96eae4812477829a",
+      "name": "architecture.md",
+      "type": "md",
+      "path": "6bd361e49edd44789788dc237b54939c/architecture.md",
+      "content": "# Stack  \n- **pygame** – renderização 2D, entrada e áudio.  \n- **Pytest** – testes unitários para lógica de movimento e colisões.\n\n# Arquivos Necessários  \n- `main.py` – ponto de entrada, inicializa pygame, cria instância de `Game` e entra no loop.  \n- `game.py` – contém a classe `Game` que gerencia entidades, tempo, lógica de jogo e renderização.  \n- `entities.py` – define classes `Player`, `Asteroid`, `Projectile` e utilitários de colisão.\n\n# Separação Lógica vs Renderização  \n- **Lógica** (sem `pygame.init`)  \n  - Todas as classes (`Player`, `Asteroid`, `Projectile`) operam apenas com coordenadas, velocidades e estados.  \n  - Métodos `update(dt)` e `collides_with(other)` são puros, não dependem de pygame.  \n  - Testes unitários podem instanciar objetos e chamar esses métodos sem inicializar o módulo pygame.  \n- **Renderização**  \n  - Responsável apenas por desenhar sprites no `pygame.Surface`.  \n  - Funções de renderização recebem objetos de lógica e acessam atributos como `pos` e `sprite`.  \n  - Mantém a camada de apresentação isolada, permitindo que a lógica seja testada em qualquer ambiente.\n\n# Game Loop  \n```python\n# main.py\nimport pygame\nfrom game import Game\n\ndef main():\n    pygame.init()\n    screen = pygame.display.set_mode((640, 480))\n    clock = pygame.time.Clock()\n    game = Game(screen)\n\n    running = True\n    while running:\n        dt = clock.tick(60) / 1000.0  # segundos\n        for event in pygame.event.get():\n            if event.type == pygame.QUIT:\n                running = False\n            game.handle_input(event)\n\n        game.update(dt)\n        game.render()\n        pygame.display.flip()\n\n    pygame.quit()\n\nif __name__ == \"__main__\":\n    main()\n```\n\n- **Entrada** – `Game.handle_input(event)` atualiza estado do jogador.  \n- **Atualização** – `Game.update(dt)` chama `update(dt)` de todas as entidades, gera asteroides, remove projeções fora da tela e verifica colisões.  \n- **Renderização** – `Game.render()` desenha todas as entidades e HUD (tempo restante, vida).  \n- **Loop** – repete até 30–60 s ou colisão fatal.\n\n# Colisões e Pontuação  \n- **Detecção** – método `collides_with(other)` usa retângulos (`pygame.Rect`) calculados a partir das posições e tamanhos dos sprites.  \n- **Reação**  \n  - *Player ↔ Asteroid* → vida do jogador decrementa; se vida == 0, fim de jogo.  \n  - *Projectile ↔ Asteroid* → ambos são removidos; pontuação +1.  \n- **Pontuação** – mantida em `Game.score`. Exibida no HUD.  \n- **Testes** – com Pytest, verificam que:  \n  - colisão entre dois objetos retorna `True`.  \n  - colisão entre objetos não sobrepostos retorna `False`.  \n  - disparar projétil reduz a lista de asteroides e aumenta a pontuação.  \n\n---",
+      "created_at": "2026-09-29T01:37:42.113353Z"
+    }
+  ],
+  "created_at": "2026-09-29T01:37:38.962541Z",
+  "updated_at": "2026-09-29T01:37:45.051271Z"
+}

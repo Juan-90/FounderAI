@@ -1,0 +1,33 @@
+{
+  "mission_id": "f61b8563de6d480dac2940823c322654",
+  "project_id": "43a30a6679314e41b3b237a34d2b07d5",
+  "mode": "BUILD",
+  "status": "FAILED",
+  "current_stage": "architecture",
+  "mode_payload": {
+    "project_name": "BarbeariaApp",
+    "intent": "Quero um jogo 2D simples de nave atirando em asteroides",
+    "project_type": "GAME",
+    "error": "LLMProviderError: [TIMEOUT] Inferência em 'local' excedeu 60.0s."
+  },
+  "artifacts": [
+    {
+      "id": "f99cc5547b2642ee89fa05658668154f",
+      "name": "requirements.md",
+      "type": "md",
+      "path": "f61b8563de6d480dac2940823c322654/requirements.md",
+      "content": "# Game Loop  \n- **Duration**: Each match lasts **30–60 seconds**.  \n- **Timing**: Fixed‑time step of **60 fps** (≈16.67 ms per frame).  \n- **Sequence**:  \n  1. **Input** – read player controls.  \n  2. **Update** – move player, asteroids, and projectiles; handle collisions.  \n  3. **Render** – draw all entities to the screen.  \n  4. **Check End** – if time elapsed → end match.  \n\n# Entidades  \n- **Player**  \n  - Sprite: 2‑D ship.  \n  - Properties: position, velocity, rotation, health (1 hit = death).  \n  - Capable of firing projectiles.  \n- **Asteroid**  \n  - Sprite: circular/irregular shape.  \n  - Properties: position, velocity, size (small/medium/large).  \n  - Spawns at random edges, moves across screen.  \n- **Projectile**  \n  - Sprite: small bullet.  \n  - Properties: position, velocity, lifespan (auto‑destroy after 2 s or on collision).  \n\n# Controles  \n- **Keyboard**  \n  - `← / →` – rotate left/right.  \n  - `↑` – thrust forward (accelerate).  \n  - `Space` – fire projectile.  \n- **Optional**: mouse click to fire in mouse direction (not required for MVP).  \n\n# Win/Lose Condition  \n- **Win**: Survive the full 30–60 seconds.  \n- **Lose**: Player’s ship collides with any asteroid (health reaches 0).  \n\n# Restrições  \n- **Platform**: Web browser (HTML5 Canvas) or desktop (SDL/MonoGame).  \n- **Assets**: Use royalty‑free or procedurally generated graphics; no external art packs.  \n- **Performance**: Target 60 fps on mid‑range hardware.  \n- **Code**: Single‑file or minimal module structure; no external game engines beyond the chosen framework.  \n\n# Não‑objetivos  \n- No power‑ups, upgrades, or score tracking.  \n- No split‑screen or multiplayer.  \n- No complex physics (no gravity, no inertia beyond simple velocity).  \n- No sound effects or music.  \n- No UI beyond a simple timer display.",
+      "created_at": "2026-09-29T01:37:53.456664Z"
+    },
+    {
+      "id": "cbc59e9dcdac4844ba86c81f10a02be2",
+      "name": "architecture.md",
+      "type": "md",
+      "path": "f61b8563de6d480dac2940823c322654/architecture.md",
+      "content": "# Stack  \n- **Python 3.11+**  \n- **Pygame** – 2D rendering, input, and timing.  \n- **Pytest** – unit‑testing the deterministic game logic (no Pygame init).  \n\n# Arquivos Necessários  \n| Arquivo | Responsabilidade |\n|---------|------------------|\n| **main.py** | Inicializa Pygame, cria a janela, instancia `Game`, e entra no loop principal. |\n| **game.py** | Contém a classe `Game` que gerencia o estado global, o loop de jogo, timers, e delega atualizações/renderização para os módulos de lógica e renderização. |\n| **entities.py** | Define as classes `Player`, `Asteroid`, `Projectile` e os métodos de atualização, colisão e desenho. |\n\n# Separação Lógica vs Renderização  \n- **Lógica** (`entities.py` + `game.py`):  \n  - Operações matemáticas, física, colisões e timers são puras funções/objetos Python.  \n  - Não importam `pygame` nem chamam `pygame.init()`.  \n  - Testáveis com **Pytest**: instanciar objetos, chamar `update(dt)` e verificar estados.  \n\n- **Renderização** (`game.py` + `main.py`):  \n  - Importa `pygame` apenas aqui.  \n  - Converte estados lógicos em chamadas de desenho (`blit`, `draw.circle`, etc.).  \n  - Mantém a lógica livre de dependências de Pygame, permitindo execução em ambientes sem display (CI).  \n\n# Game Loop  \n```text\nwhile not game_over:\n    dt = clock.tick(60) / 1000.0          # 60 fps → ~16.67 ms/frame\n    # 1. Input\n    events = pygame.event.get()\n    for e in events:\n        if e.type == pygame.QUIT:\n            running = False\n        elif e.type == pygame.KEYDOWN:\n            player.handle_key(e.key, True)\n        elif e.type == pygame.KEYUP:\n            player.handle_key(e.key, False)\n\n    # 2. Update\n    game.update(dt)                       # move entities, handle collisions\n\n    # 3. Render\n    screen.fill((0, 0, 0))\n    game.render(screen)                   # draw all sprites\n    draw_timer(screen, elapsed_time)\n\n    # 4. Check End\n    if elapsed_time >= match_duration:\n        game_over = True\n```\n- `game.update(dt)` chama `update(dt)` de cada entidade, aplica colisões e remove objetos expirados.  \n- `game.render(screen)` delega a cada entidade seu próprio método `draw(surface)`.  \n\n# Colisões e Pontuação  \n- **Detecção**:  \n  - **Player–Asteroid**: `pygame.sprite.collide_circle` (radius based).  \n  - **Projectile–Asteroid**: same circle collision.  \n  - Colisões são resolvidas na fase de atualização; colisão entre player e asteroide termina o jogo.  \n- **Pontuação**:  \n  - Não há pontuação, mas a lógica pode contar “asteroids_destroyed” para métricas de teste.  \n  - Cada `Projectile` tem `lifespan = 2.0 s`; é removido se `age > lifespan`.  \n- **Estado de vitória/derrota**:  \n  - `Game` mantém `self.won` e `self.lost`.  \n  - `self.lost` é definido quando `player.health <= 0`.  \n  - `self.won` é definido quando `elapsed_time >= match_duration`.  \n\n---",
+      "created_at": "2026-09-29T01:37:55.061649Z"
+    }
+  ],
+  "created_at": "2026-09-29T01:37:51.927677Z",
+  "updated_at": "2026-09-29T01:38:55.607918Z"
+}
