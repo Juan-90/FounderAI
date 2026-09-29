@@ -1,7 +1,13 @@
 """
 Schemas de dados do Fundador IA.
 Define as estruturas de entrada e saída de cada agente.
+
+v4.3.0: `MissionState` legado REMOVIDO deste módulo. O modelo oficial agora
+vive em `backend.domain.models.MissionState` e é re-exportado aqui apenas
+para retrocompatibilidade de imports legados (deprecado).
 """
+
+from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
@@ -10,8 +16,12 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-# JurorResponse vive em backend/schemas/council.py (v2.0+)
 from backend.schemas.council import JurorResponse
+
+# DEPRECADO (v4.3.0): o MissionState oficial é o de backend.domain.models.
+# Re-export mantido para não quebrar imports legados; novos códigos devem
+# importar diretamente de backend.domain.models.
+from backend.domain.models import MissionState  # noqa: F401
 
 
 # ─────────────────────────────────────────
@@ -207,33 +217,11 @@ class MissionScore(BaseModel):
 
 
 # ─────────────────────────────────────────
-# Mission State
+# FASE 3 — Contexto Expandido (Bloco 1)
 # ─────────────────────────────────────────
 
-class MissionState(BaseModel):
-    """Estado completo da missão no pipeline de agentes."""
-    input:          MissionInput
-    mission_brief:  Optional[MissionBrief]  = None
-    reality_report: Optional[RealityReport] = None
-    risk_report:    Optional[RiskReport]    = None
-    mission_score:  Optional[MissionScore]  = None
-    final_decision: Optional[MissionDecision] = None
-    error:          Optional[str]           = None
-
-
-# ═════════════════════════════════════════════════════════════
-# FASE 3 — Contexto Expandido (Bloco 1)
-# Anexo aditivo: nenhuma definição acima foi modificada.
-# ═════════════════════════════════════════════════════════════
-
 class ContextPayload(BaseModel):
-    """
-    Resultado de `backend.core.context.prepare_context_payload`.
-
-    Evolução tipada (Pydantic V2) do payload de contexto da Sprint 3,
-    com aliases de retrocompatibilidade para o dataclass legado de
-    `backend.tools.file_tools`.
-    """
+    """Resultado de `backend.core.context.prepare_context_payload`."""
     included: list[str] = Field(
         default_factory=list,
         description="Lista de caminhos dos arquivos incluídos com sucesso",
@@ -246,42 +234,27 @@ class ContextPayload(BaseModel):
         default_factory=list,
         description="Arquivos omitidos por estouro do limite total",
     )
-    formatted_content: str = Field(
-        default="",
-        description="Conteúdo final formatado para o prompt",
-    )
-    total_chars: int = Field(
-        default=0,
-        description="Total de caracteres processados",
-    )
-    warnings: list[str] = Field(
-        default_factory=list,
-        description="Alertas e avisos durante o processamento",
-    )
+    formatted_content: str = Field(default="", description="Conteúdo final formatado para o prompt")
+    total_chars: int = Field(default=0, description="Total de caracteres processados")
+    warnings: list[str] = Field(default_factory=list, description="Alertas e avisos durante o processamento")
 
-    # ── Aliases de retrocompatibilidade (dataclass Sprint 3) ──
     @property
     def block(self) -> str:
-        """Compat com `payload.block` (legado)."""
         return self.formatted_content
 
     @property
     def included_files(self) -> list[str]:
-        """Compat com `payload.included_files` (legado)."""
         return self.included
 
     @property
     def truncated_files(self) -> list[str]:
-        """Compat com `payload.truncated_files` (legado)."""
         return self.truncated
 
     @property
     def omitted_files(self) -> list[str]:
-        """Compat com `payload.omitted_files` (legado)."""
         return self.omitted
 
     def summary(self) -> str:
-        """Resumo human-readable para a CLI (ex.: '3 incluído(s), 1 truncado(s), 0 omitido(s)')."""
         return (
             f"{len(self.included)} incluído(s), "
             f"{len(self.truncated)} truncado(s), "

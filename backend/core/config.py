@@ -1,5 +1,5 @@
 """
-Configurações centrais do FounderAI (v4.2.0).
+Configurações centrais do FounderAI (v4.3.0).
 """
 
 from __future__ import annotations
@@ -57,11 +57,16 @@ class Settings(BaseSettings):
     ESCALATION_WEBHOOK_PROVIDER: str = "generic"
     ESCALATION_WEBHOOK_TIMEOUT_SECONDS: int = 8
 
-    # ── v4.2.0 — BUILD Mode Mínimo (Path A) ──
+    # ── v4.2.0 — BUILD Mode ──
     BUILD_MODE_ENABLED: bool = True
     BUILD_DEFAULT_PROJECT_TYPE: str = "WEB_APP"
     BUILD_DEFAULT_DEPLOYMENT_STRATEGY: str = "PRIVATE"
     BUILD_ARTIFACTS_DIR: str = "artifacts/build"
+
+    # ── v4.3.0 — BUILD Path B (Game 2D) ──
+    BUILD_GAME_ENABLED: bool = True
+    BUILD_GAME_ENGINE: str = "pygame"
+    BUILD_GAME_HEADLESS: bool = True
 
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
@@ -82,7 +87,7 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     qdrant_collection: str = "missions"
 
-    # ── App ──
+    # ── App ─
     app_name: str = "Fundador IA"
     app_version: str = "0.2.0"
     debug: bool = False

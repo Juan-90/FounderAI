@@ -1,20 +1,16 @@
 """
-Agentes especializados do Modo BUILD (v4.2.0).
+Agentes especializados do Modo BUILD (v4.2 + v4.3 profiles).
 
-Cada agente encapsula uma chamada ao LLMClient com prompt estruturado:
-  • RequirementsAgent:    intenção → requirements.md (objetivo, usuários, MVP,
-                          restrições, não-objetivos)
-  • ArchitectureAgent:    requisitos → architecture.md (stack + arquivos)
-  • ImplementationAgent:  arquitetura → files{} + test_files{}
-  • BuildReporter:        contexto → report.md (com fallback determinístico)
-
-Testabilidade: aceitam qualquer cliente compatível via Protocol LLMBuildClient.
+Cada agente aceita um `BaseProjectProfile` que define stack, estrutura de
+arquivos e prompts específicos (Web/SaaS vs Game 2D). Sem profile, usa
+`WebAppProfile` como default (retrocompatível com a v4.2).
 """
 
 from __future__ import annotations
 
 from typing import Any, Protocol
 
+from backend.build.profiles import BaseProjectProfile, WebAppProfile
 from backend.core.llm_client import LLMClient
 
 
@@ -23,8 +19,6 @@ class BuildAgentError(Exception):
 
 
 class LLMBuildClient(Protocol):
-    """Contrato mínimo de cliente LLM usado pelos agentes de build."""
-
     async def complete(
         self,
         system_prompt: str,
@@ -60,60 +54,59 @@ def _as_str_dict(value: object) -> dict[str, str] | None:
 
 
 class RequirementsAgent:
-    """Transforma a intenção do fundador em requisitos estruturados."""
+    """Transforma a intenção do fundador em requisitos (específicos do profile)."""
 
-    def __init__(self, client: LLMBuildClient | None = None) -> None:
+    def __init__(
+        self,
+        client: LLMBuildClient | None = None,
+        profile: BaseProjectProfile | None = None,
+    ) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
+        self._profile: BaseProjectProfile = profile if profile is not None else WebAppProfile()
 
     async def generate(self, intent: str) -> str:
-        user = (
-            f"INTENÇÃO DO FUNDADOR:\n{intent}\n\n"
-            "Produza um documento Markdown de requisitos com EXATAMENTE estas seções:\n"
-            "# Objetivo\n# Usuários\n# MVP\n"
-            "  - Serviços\n  - Agendamento\n  - Listagem\n  - Cancelamento\n"
-            "# Restrições\n# Não-objetivos\n\n"
-            "Seja específico e mínimo (MVP). Não invente escopo fora das seções."
+        return await self._client.complete(
+            system_prompt=_SYSTEM,
+            user_prompt=self._profile.requirements_prompt(intent),
         )
-        return await self._client.complete(system_prompt=_SYSTEM, user_prompt=user)
 
 
 class ArchitectureAgent:
-    """Define a estrutura do sistema a partir dos requisitos."""
+    """Define a estrutura do sistema a partir dos requisitos (por profile)."""
 
-    def __init__(self, client: LLMBuildClient | None = None) -> None:
+    def __init__(
+        self,
+        client: LLMBuildClient | None = None,
+        profile: BaseProjectProfile | None = None,
+    ) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
+        self._profile: BaseProjectProfile = profile if profile is not None else WebAppProfile()
 
     async def generate(self, requirements_md: str) -> str:
-        user = (
-            "REQUISITOS:\n"
-            f"{requirements_md}\n\n"
-            "Produza um documento Markdown de arquitetura com EXATAMENTE estas seções:\n"
-            "# Stack\n (use FastAPI + SQLite)\n"
-            "# Arquivos Necessários\n"
-            "  Liste obrigatoriamente: main.py, models.py, schemas.py, database.py, test_main.py\n"
-            "# Responsabilidades por Arquivo\n# Fluxo de Dados\n"
+        return await self._client.complete(
+            system_prompt=_SYSTEM,
+            user_prompt=self._profile.architecture_prompt(requirements_md),
         )
-        return await self._client.complete(system_prompt=_SYSTEM, user_prompt=user)
 
 
 class ImplementationAgent:
-    """Gera o código-fonte e os testes a partir da arquitetura."""
+    """Gera código + testes a partir da arquitetura (por profile)."""
 
-    def __init__(self, client: LLMBuildClient | None = None) -> None:
+    def __init__(
+        self,
+        client: LLMBuildClient | None = None,
+        profile: BaseProjectProfile | None = None,
+    ) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
+        self._profile: BaseProjectProfile = profile if profile is not None else WebAppProfile()
 
     async def generate(
         self, architecture_md: str
     ) -> tuple[dict[str, str], dict[str, str]]:
-        user = (
-            "ARQUITETURA:\n"
-            f"{architecture_md}\n\n"
-            "Gere o código completo e executável (FastAPI + SQLite) e os testes pytest.\n"
-            'Formato da resposta: {"files": {"main.py": "...", ...}, '
-            '"test_files": {"test_main.py": "..."}}\n'
-            "Regras: código completo (sem trechos), imports coerentes, testes determinísticos."
+        data = await self._client.complete_json(
+            system_prompt=_SYSTEM,
+            user_prompt=self._profile.implementation_prompt(architecture_md),
         )
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
         files = _as_str_dict(data.get("files"))
         if not files:
             raise BuildAgentError(

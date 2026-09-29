@@ -1,16 +1,9 @@
 """
-BuildPipeline — orquestrador do Modo BUILD (v4.2.0).
+BuildPipeline — orquestrador do Modo BUILD (v4.2 + v4.3 profiles).
 
-Estágios sequenciais (com hook on_stage para progresso na CLI):
-  1. Requirements      → requirements.md
-  2. Architecture      → architecture.md
-  3. Implementation    → files{} + test_files{} (salvos como artifacts)
-  4. Quality Gate      → StaticAnalysisGate (até STATIC_ANALYSIS_MAX_CYCLES reparos)
-  5. Test Execution    → TDDLoop no DockerRunner
-  6. Report            → report.md + mission_state.json
-
-O MissionState é atualizado a cada estágio; falhas são tratadas graciosamente
-(status FAILED/ESCALATED) sem propagar exceção ao chamador.
+Aceita `project_type`/`profile` para especializar os agentes (Web vs Game).
+Estágios: requirements → architecture → implementation → quality gate →
+test execution → report. Falhas tratadas graciosamente.
 """
 
 from __future__ import annotations
@@ -27,9 +20,10 @@ from backend.build.agents import (
     ImplementationAgent,
     RequirementsAgent,
 )
+from backend.build.profiles import BaseProjectProfile, profile_for
 from backend.core.config import Settings, settings
 from backend.domain.artifacts import ArtifactManager
-from backend.domain.enums import MissionStatus, ProjectMode
+from backend.domain.enums import MissionStatus, ProjectMode, ProjectType
 from backend.domain.models import MissionState
 from backend.qa.agent import QAAgent
 from backend.qa.schemas import TDDRequest, TDDResult
@@ -59,7 +53,7 @@ def _utcnow() -> datetime:
 
 
 class BuildPipeline:
-    """Orquestra os 6 estágios do Modo BUILD."""
+    """Orquestra os 6 estágios do Modo BUILD, especializado por profile."""
 
     def __init__(
         self,
@@ -69,14 +63,26 @@ class BuildPipeline:
         repair_agent: RepairAgentLike | None = None,
         tdd_loop: TDDRunnerLike | None = None,
         config: Settings | None = None,
+        project_type: ProjectType | None = None,
+        profile: BaseProjectProfile | None = None,
     ) -> None:
         self._config: Settings = config if config is not None else settings
         self._artifacts: ArtifactManager = (
             artifact_manager if artifact_manager is not None else ArtifactManager(self._config)
         )
-        self._requirements = RequirementsAgent(client)
-        self._architecture = ArchitectureAgent(client)
-        self._implementation = ImplementationAgent(client)
+        if profile is not None:
+            self._profile = profile
+        else:
+            effective_type = project_type or ProjectType(
+                self._config.BUILD_DEFAULT_PROJECT_TYPE
+            )
+            self._profile = profile_for(
+                effective_type, headless=self._config.BUILD_GAME_HEADLESS
+            )
+
+        self._requirements = RequirementsAgent(client, self._profile)
+        self._architecture = ArchitectureAgent(client, self._profile)
+        self._implementation = ImplementationAgent(client, self._profile)
         self._reporter = BuildReporter(client)
         self._gate: StaticGateLike = (
             static_gate if static_gate is not None else StaticAnalysisGate()
@@ -89,6 +95,10 @@ class BuildPipeline:
         else:
             from backend.qa.orchestrator import TDDLoop
             self._tdd = TDDLoop(config=self._config)
+
+    @property
+    def profile(self) -> BaseProjectProfile:
+        return self._profile
 
     # ── Helpers ──
     @staticmethod
@@ -135,25 +145,26 @@ class BuildPipeline:
             mode=ProjectMode.BUILD,
             status=MissionStatus.IN_PROGRESS,
             current_stage="init",
-            mode_payload={"project_name": project_name, "intent": intent},
+            mode_payload={
+                "project_name": project_name,
+                "intent": intent,
+                "project_type": self._profile.project_type.value,
+            },
         )
         tests_success = False
         escalated = False
 
         try:
-            # 1 — Requirements
             self._emit(on_stage, 1, "Generating Requirements...")
             req_md = await self._requirements.generate(intent)
             self._save(state, "requirements.md", req_md)
             self._advance(state, "requirements")
 
-            # 2 — Architecture
             self._emit(on_stage, 2, "Designing Architecture...")
             arch_md = await self._architecture.generate(req_md)
             self._save(state, "architecture.md", arch_md)
             self._advance(state, "architecture")
 
-            # 3 — Implementation
             self._emit(on_stage, 3, "Generating Code & Tests...")
             files, test_files = await self._implementation.generate(arch_md)
             for name, content in files.items():
@@ -162,12 +173,10 @@ class BuildPipeline:
                 self._save(state, name, content)
             self._advance(state, "implementation")
 
-            # 4 — Quality Gate (com reparos)
             self._emit(on_stage, 4, "Static Analysis Gate (Ruff/Mypy)...")
             files, test_files = await self._quality_gate(state, files, test_files)
             self._advance(state, "quality_gate")
 
-            # 5 — Test Execution (sandbox)
             self._emit(on_stage, 5, "Sandbox Execution & TDD Loop...")
             tdd = await self._tdd.run(
                 TDDRequest(
@@ -182,12 +191,12 @@ class BuildPipeline:
             state.mode_payload["tdd_summary"] = tdd.summary
             self._advance(state, "test_execution")
 
-            # 6 — Report
             self._emit(on_stage, 6, "Generating Final Report...")
             report_md = await self._reporter.generate(
                 {
                     "project_name": project_name,
                     "intent": intent,
+                    "project_type": self._profile.project_type.value,
                     "files": sorted(files.keys()),
                     "test_files": sorted(test_files.keys()),
                     "static_gate_passed": state.mode_payload.get("static_gate_passed"),
@@ -206,7 +215,7 @@ class BuildPipeline:
             else:
                 state.status = MissionStatus.FAILED
 
-        except Exception as exc:  # gracioso: nunca propaga
+        except Exception as exc:
             state.status = MissionStatus.FAILED
             state.mode_payload["error"] = f"{type(exc).__name__}: {exc}"
         finally:
