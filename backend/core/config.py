@@ -1,5 +1,5 @@
 """
-Configurações centrais do FounderAI (v4.3.0).
+Configurações centrais do FounderAI (v4.3.0 + resiliência de LLM).
 """
 
 from __future__ import annotations
@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     PRIMARY_PROVIDER: ProviderName = "groq"
     FALLBACK_PROVIDER: ProviderName = "local"
     LLM_TIMEOUT_SECONDS: float = 60.0
+    # Timeout do provider LOCAL (Ollama) — codegen em CPU é lento (v4.3 hotfix).
+    LLM_LOCAL_TIMEOUT_SECONDS: float = 180.0
+    # Retry com backoff para HTTP transitório (429/5xx) antes do fallback.
+    LLM_HTTP_RETRIES: int = 2
+    LLM_RETRY_BACKOFF_SECONDS: float = 1.5
     ARCHITECT_PROVIDER: ProviderName | None = None
     SECURITYCODER_PROVIDER: ProviderName | None = None
     PRODUCTSTRATEGIST_PROVIDER: ProviderName | None = None
@@ -75,7 +80,7 @@ class Settings(BaseSettings):
     model_reasoning: str = "gemma2:2b"
     council_model: str = "gemma2:2b"
 
-    # ── PostgreSQL ──
+    # ── PostgreSQL ─
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "fundador_ia"
@@ -87,7 +92,7 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     qdrant_collection: str = "missions"
 
-    # ── App ─
+    # ── App ──
     app_name: str = "Fundador IA"
     app_version: str = "0.2.0"
     debug: bool = False
@@ -131,6 +136,12 @@ class Settings(BaseSettings):
             "local": self.council_model,
         }
         return models[provider]
+
+    def timeout_for(self, provider: ProviderName) -> float:
+        """Timeout por provedor: local usa teto maior (codegen lento em CPU)."""
+        if provider == "local":
+            return max(self.LLM_LOCAL_TIMEOUT_SECONDS, 120.0)
+        return self.LLM_TIMEOUT_SECONDS
 
     def validate_provider_config(self) -> list[str]:
         warnings: list[str] = []

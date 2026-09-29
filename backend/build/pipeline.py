@@ -1,9 +1,10 @@
 """
-BuildPipeline — orquestrador do Modo BUILD (v4.3: game_spec.json + env headless).
+BuildPipeline — orquestrador do Modo BUILD (v4.3 hotfix: repair gracioso).
 
-Fix v4.3.0: Protocol RepairAgentLike com anotação de retorno completa
-(tuple[dict, dict, str]), tornando QAAgent estruturalmente compatível e
-permitindo o unpack do resultado de generate_fix.
+v4.3 hotfix 2: se o repair do gate estático falhar (erro de LLM Cloud+Local),
+o pipeline NÃO propaga a exceção: registra mode_payload["repair_error"],
+mantém o código atual e segue para a sandbox (estágio 5). O gate é um
+pre-check de economia, não um bloqueio absoluto.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional, Protocol
 from uuid import uuid4
+
+from rich.console import Console
 
 from backend.analysis.models import StaticAnalysisResult
 from backend.analysis.static_gate import StaticAnalysisGate
@@ -26,6 +29,8 @@ from backend.domain.models import MissionState
 from backend.qa.agent import QAAgent
 from backend.qa.schemas import TDDRequest, TDDResult
 
+console = Console(stderr=True)
+
 StageCallback = Callable[[int, str], None]
 
 
@@ -34,8 +39,6 @@ class StaticGateLike(Protocol):
 
 
 class RepairAgentLike(Protocol):
-    """Contrato do agente de reparo (satisfeito por QAAgent)."""
-
     async def generate_fix(
         self,
         source_files: dict[str, str],
@@ -113,16 +116,45 @@ class BuildPipeline:
         }
         self._save(state, "game_spec.json", json.dumps(spec, indent=2))
 
-    async def _quality_gate(
-        self,
-        state: MissionState,
-        files: dict[str, str],
-        test_files: dict[str, str],
-    ) -> tuple[dict[str, str], dict[str, str]]:
+    def _save_failure_report(self, state: MissionState, error_msg: str) -> None:
+        failure_report = (
+            "# O que foi construído\n"
+            f"Projeto: {state.mode_payload.get('project_name', 'n/a')}\n"
+            f"Estágio da falha: {state.current_stage}\n\n"
+            "# Resultado das Análises e Testes\n"
+            f"FALHA no estágio '{state.current_stage}'.\n\n"
+            "# Erro\n"
+            f"```\n{error_msg}\n```\n\n"
+            "# Limitações\n"
+            "- Build interrompida; artefatos parciais podem existir.\n"
+            "- Consulte mission_state.json (mode_payload.error) para o mesmo diagnóstico.\n"
+        )
+        try:
+            self._save(state, "report.md", failure_report)
+        except Exception:
+            pass
+
+    async def _quality_gate(self, state, files, test_files):
+        """
+        Gate estático com reparos. Se o repair falhar (erro de LLM), NÃO
+        propaga: registra repair_error, mantém o código atual e segue adiante
+        (a sandbox é quem valida executabilidade de fato).
+        """
         result = self._gate.run({**files, **test_files})
         cycles = 0
         while not result.passed and cycles < self._config.STATIC_ANALYSIS_MAX_CYCLES:
-            files, test_files, _p = await self._repair.generate_fix(files, test_files, result.summary)
+            try:
+                files, test_files, _p = await self._repair.generate_fix(
+                    files, test_files, result.summary
+                )
+            except Exception as exc:
+                error_msg = f"{type(exc).__name__}: {exc}"
+                state.mode_payload["repair_error"] = error_msg
+                console.print(
+                    f"[yellow]⚠  Repair do gate estático falhou ({error_msg}). "
+                    "Seguindo para a sandbox com o código atual.[/yellow]"
+                )
+                break
             result = self._gate.run({**files, **test_files})
             cycles += 1
         state.mode_payload["static_gate_passed"] = result.passed
@@ -204,7 +236,10 @@ class BuildPipeline:
 
         except Exception as exc:
             state.status = MissionStatus.FAILED
-            state.mode_payload["error"] = f"{type(exc).__name__}: {exc}"
+            error_msg = f"{type(exc).__name__}: {exc}"
+            state.mode_payload["error"] = error_msg
+            state.mode_payload["error_stage"] = state.current_stage
+            self._save_failure_report(state, error_msg)
         finally:
             state.updated_at = _utcnow()
             self._artifacts.save_mission_state(state)

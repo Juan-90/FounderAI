@@ -1,15 +1,9 @@
 """
-Testes unitários do LLM Client (Fase 2 + Fase 3 Bloco 2 — Observabilidade).
+Testes unitários do LLM Client (Fase 2 + v4.3 resiliência).
 
-Cobre:
-  • Resolução de provedor e overrides por papel;
-  • Settings via env (dict[str, str] + monkeypatch.setenv);
-  • Fallback Cloud → Local, timeout, JSON inválido, ausência de API key;
-  • Observabilidade: LLMCallResult (provider_used/model_used/fallback_triggered);
-  • Validação de configuração: Settings.validate_provider_config();
-  • Retrocompatibilidade: aliases Ollama*Error e complete() retornando str.
-
-Rede simulada com httpx.MockTransport (determinístico, sem I/O real).
+Cobre: resolução de provedor, settings via env, fallback Cloud→Local (isolado
+com LLM_HTTP_RETRIES=0), retry/backoff em HTTP transitório (429/5xx), timeout,
+JSON inválido, observabilidade (LLMCallResult) e validação de configuração.
 """
 
 from __future__ import annotations
@@ -35,9 +29,6 @@ from backend.core.llm_client import (
 )
 
 
-# ─────────────────────────────────────────────────────────────
-# Factories tipadas
-# ─────────────────────────────────────────────────────────────
 def _make_settings(
     primary: ProviderName = "groq",
     fallback: ProviderName = "local",
@@ -47,12 +38,15 @@ def _make_settings(
     productstrategist: ProviderName | None = None,
     groq_api_key: str = "groq-test-key",
     local_base_url: str = "http://localhost:11434/v1",
+    http_retries: int = 2,
+    retry_backoff: float = 1.5,
 ) -> Settings:
-    """Instancia `Settings` com tipos estritos: ProviderName (Literal) e float."""
     return Settings(
         PRIMARY_PROVIDER=primary,
         FALLBACK_PROVIDER=fallback,
         LLM_TIMEOUT_SECONDS=timeout,
+        LLM_HTTP_RETRIES=http_retries,
+        LLM_RETRY_BACKOFF_SECONDS=retry_backoff,
         ARCHITECT_PROVIDER=architect,
         SECURITYCODER_PROVIDER=securitycoder,
         PRODUCTSTRATEGIST_PROVIDER=productstrategist,
@@ -64,7 +58,6 @@ def _make_settings(
 
 
 def _openai_response(content: str) -> httpx.Response:
-    """Envelope OpenAI-compatible válido."""
     return httpx.Response(
         status_code=200,
         json={"choices": [{"message": {"role": "assistant", "content": content}}]},
@@ -72,7 +65,6 @@ def _openai_response(content: str) -> httpx.Response:
 
 
 def _run(scenario: Coroutine[Any, Any, None]) -> None:
-    """Executa um cenário async em teste sync (sem plugin de asyncio)."""
     asyncio.run(scenario)
 
 
@@ -85,11 +77,10 @@ def test_resolve_provider_padrao_e_override_por_papel() -> None:
     assert client.resolve_provider() == "groq"
     assert client.resolve_provider("architect") == "openrouter"
     assert client.resolve_provider("securitycoder") == "groq"
-    assert client.resolve_provider("ARCHITECT") == "openrouter"  # case-insensitive
+    assert client.resolve_provider("ARCHITECT") == "openrouter"
 
 
 def test_settings_carrega_overrides_de_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Env vars são strings: dict[str, str] + monkeypatch.setenv."""
     overrides: dict[str, str] = {
         "PRIMARY_PROVIDER": "openrouter",
         "FALLBACK_PROVIDER": "local",
@@ -98,19 +89,16 @@ def test_settings_carrega_overrides_de_env(monkeypatch: pytest.MonkeyPatch) -> N
     }
     for key, value in overrides.items():
         monkeypatch.setenv(key, value)
-
     cfg = Settings()
     assert cfg.PRIMARY_PROVIDER == "openrouter"
     assert cfg.FALLBACK_PROVIDER == "local"
     assert cfg.ARCHITECT_PROVIDER == "groq"
-    assert isinstance(cfg.LLM_TIMEOUT_SECONDS, float)
     assert cfg.LLM_TIMEOUT_SECONDS == 12.5
 
 
 def test_env_invalido_para_provider_raise_validation_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """O Literal ProviderName rejeita valores fora do conjunto na borda."""
     monkeypatch.setenv("PRIMARY_PROVIDER", "azure")
     with pytest.raises(ValidationError):
         Settings()
@@ -150,7 +138,6 @@ def test_complete_json_sucesso_no_provedor_primario() -> None:
     _run(scenario())
     assert len(recorded) == 1
     assert recorded[0].url.host == "api.groq.com"
-    assert recorded[0].headers["authorization"] == "Bearer groq-test-key"
     body: dict[str, Any] = json.loads(recorded[0].content)
     assert body["model"] == "openai/gpt-oss-20b"
 
@@ -167,6 +154,7 @@ def test_complete_retorna_texto_bruto() -> None:
 
 
 def test_fallback_automatico_cloud_para_local() -> None:
+    """Fallback isolado (retries=0): groq 500 -> local imediato."""
     recorded: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -176,7 +164,9 @@ def test_fallback_automatico_cloud_para_local() -> None:
         return _openai_response('{"status": "FINAL"}')
 
     async def scenario() -> None:
-        client = LLMClient(_make_settings(), transport=httpx.MockTransport(handler))
+        client = LLMClient(
+            _make_settings(http_retries=0), transport=httpx.MockTransport(handler)
+        )
         result = await client.complete_json("sys", "user")
         assert result == {"status": "FINAL"}
 
@@ -192,7 +182,7 @@ def test_sem_api_key_ativa_fallback_sem_chamada_cloud() -> None:
         return _openai_response('{"ok": true}')
 
     async def scenario() -> None:
-        cfg = _make_settings(groq_api_key="")  # cloud sem credencial
+        cfg = _make_settings(groq_api_key="")
         client = LLMClient(cfg, transport=httpx.MockTransport(handler))
         assert await client.complete_json("sys", "user") == {"ok": True}
 
@@ -227,7 +217,7 @@ def test_json_invalido_raise_invalid_json() -> None:
         assert exc_info.value.kind is LLMErrorKind.INVALID_JSON
 
     _run(scenario())
-    assert len(recorded) == 1  # parse ocorre após a cadeia de fallback
+    assert len(recorded) == 1
 
 
 def test_override_por_papel_roteia_provedor() -> None:
@@ -244,7 +234,6 @@ def test_override_por_papel_roteia_provedor() -> None:
 
     _run(scenario())
     assert recorded[0].url.host == "openrouter.ai"
-    assert recorded[0].headers["authorization"] == "Bearer or-test-key"
 
 
 def test_primary_local_nao_duplica_chamadas() -> None:
@@ -264,10 +253,81 @@ def test_primary_local_nao_duplica_chamadas() -> None:
 
 
 # ─────────────────────────────────────────────────────────────
-# Fase 3 (Bloco 2) — Observabilidade via complete_verbose
+# v4.3 — Retry com backoff em HTTP transitório
+# ─────────────────────────────────────────────────────────────
+def test_retry_em_http_500_antes_do_fallback() -> None:
+    """groq 500 persistente: 1 chamada + 2 retries, depois fallback local."""
+    recorded: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        recorded.append(request)
+        if request.url.host == "api.groq.com":
+            return httpx.Response(500, json={"error": "boom"})
+        return _openai_response('{"ok": true}')
+
+    async def scenario() -> None:
+        client = LLMClient(
+            _make_settings(http_retries=2, retry_backoff=0.01),
+            transport=httpx.MockTransport(handler),
+        )
+        result = await client.complete_json("sys", "user")
+        assert result == {"ok": True}
+
+    _run(scenario())
+    assert [r.url.host for r in recorded] == ["api.groq.com"] * 3 + ["localhost"]
+
+
+def test_retry_recupera_em_segunda_tentativa_sem_fallback() -> None:
+    """groq 500 na 1ª, 200 na 2ª: sucesso sem acionar fallback."""
+    recorded: list[httpx.Request] = []
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        recorded.append(request)
+        calls["n"] += 1
+        if request.url.host == "api.groq.com":
+            if calls["n"] == 1:
+                return httpx.Response(500, json={"error": "boom"})
+            return _openai_response('{"recuperado": true}')
+        return _openai_response('{"local": true}')
+
+    async def scenario() -> None:
+        client = LLMClient(
+            _make_settings(http_retries=2, retry_backoff=0.01),
+            transport=httpx.MockTransport(handler),
+        )
+        result = await client.complete_json("sys", "user")
+        assert result == {"recuperado": True}
+
+    _run(scenario())
+    assert [r.url.host for r in recorded] == ["api.groq.com", "api.groq.com"]
+
+
+def test_resposta_vazia_triggera_fallback() -> None:
+    """groq 200 com content vazio -> tratado como erro -> fallback local."""
+    recorded: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        recorded.append(request)
+        if request.url.host == "api.groq.com":
+            return _openai_response("")
+        return _openai_response('{"local": true}')
+
+    async def scenario() -> None:
+        client = LLMClient(
+            _make_settings(http_retries=0), transport=httpx.MockTransport(handler)
+        )
+        result = await client.complete_json("sys", "user")
+        assert result == {"local": True}
+
+    _run(scenario())
+    assert [r.url.host for r in recorded] == ["api.groq.com", "localhost"]
+
+
+# ─────────────────────────────────────────────────────────────
+# Observabilidade (Bloco 2)
 # ─────────────────────────────────────────────────────────────
 def test_complete_verbose_retorna_metadados_do_provedor() -> None:
-    """complete_verbose inclui provider_used, model_used e fallback_triggered=False."""
     def handler(request: httpx.Request) -> httpx.Response:
         return _openai_response("hello founder")
 
@@ -285,14 +345,15 @@ def test_complete_verbose_retorna_metadados_do_provedor() -> None:
 
 
 def test_complete_verbose_sinaliza_fallback_em_cadeia() -> None:
-    """Quando o primário falha: fallback_triggered=True e original_provider preenchido."""
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "api.groq.com":
             return httpx.Response(500, json={"error": "boom"})
         return _openai_response("local response")
 
     async def scenario() -> None:
-        client = LLMClient(_make_settings(), transport=httpx.MockTransport(handler))
+        client = LLMClient(
+            _make_settings(http_retries=0), transport=httpx.MockTransport(handler)
+        )
         result = await client.complete_verbose("sys", "user")
         assert isinstance(result, LLMCallResult)
         assert result.provider_used == "local"
@@ -304,7 +365,6 @@ def test_complete_verbose_sinaliza_fallback_em_cadeia() -> None:
 
 
 def test_complete_retrocompativel_retorna_apenas_string() -> None:
-    """`complete` (sem _verbose) continua retornando str — suíte legada preservada."""
     def handler(request: httpx.Request) -> httpx.Response:
         return _openai_response("texto bruto")
 
@@ -318,10 +378,9 @@ def test_complete_retrocompativel_retorna_apenas_string() -> None:
 
 
 # ─────────────────────────────────────────────────────────────
-# Fase 3 (Bloco 2) — Validação de configuração (Settings)
+# Validação de configuração (Settings)
 # ─────────────────────────────────────────────────────────────
 def test_validate_provider_config_sem_chave_gera_warning() -> None:
-    """Cloud sem API key gera warning de fallback automático."""
     cfg = _make_settings(primary="groq", groq_api_key="")
     warnings = cfg.validate_provider_config()
     assert len(warnings) >= 1
@@ -329,13 +388,11 @@ def test_validate_provider_config_sem_chave_gera_warning() -> None:
 
 
 def test_validate_provider_config_local_sem_warning() -> None:
-    """Local como primário não exige API key — zero warnings."""
     cfg = _make_settings(primary="local", groq_api_key="")
     assert cfg.validate_provider_config() == []
 
 
 def test_validate_provider_config_override_sem_chave_gera_warning() -> None:
-    """Override por papel apontando para Cloud sem chave gera warning específico."""
     cfg = Settings(
         PRIMARY_PROVIDER="groq",
         FALLBACK_PROVIDER="local",

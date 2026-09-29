@@ -1,9 +1,10 @@
 """
-CLI helper do Modo BUILD (v4.3: banner de profile + --type).
+CLI helper do Modo BUILD (v4.3: inferência de nome de projeto por tipo/intent).
 """
 
 from __future__ import annotations
 
+import re
 from typing import Callable, Optional
 
 from rich.console import Console
@@ -19,6 +20,27 @@ console = Console()
 
 StageCallback = Callable[[int, str], None]
 
+_SUFFIX_BY_TYPE: dict[ProjectType, str] = {
+    ProjectType.GAME: "Game",
+    ProjectType.WEB_APP: "App",
+    ProjectType.INTERNAL_SYSTEM: "System",
+}
+
+
+def infer_project_name(intent: str, project_type: ProjectType) -> str:
+    """
+    Infere um nome de projeto a partir da última palavra significativa do
+    intent + sufixo do tipo. Ex:
+      '...para minha barbearia' + WEB_APP -> 'BarbeariaApp'
+      '...nave atirando em asteroides' + GAME -> 'AsteroidesGame'
+    """
+    suffix = _SUFFIX_BY_TYPE[project_type]
+    words = re.findall(r"[A-Za-zÀ-ÿ]{4,}", intent or "")
+    base = words[-1].capitalize() if words else "Founder"
+    if base.endswith(suffix):
+        return base
+    return f"{base}{suffix}"
+
 
 def _make_stage_printer() -> StageCallback:
     def on_stage(index: int, label: str) -> None:
@@ -28,7 +50,7 @@ def _make_stage_printer() -> StageCallback:
 
 async def run_build_mode(
     intent: str,
-    project_name: str = "BarbeariaApp",
+    project_name: Optional[str] = None,
     project_type: Optional[ProjectType] = None,
     pipeline: Optional[BuildPipeline] = None,
 ) -> int:
@@ -40,6 +62,7 @@ async def run_build_mode(
         return 1
 
     effective_type = project_type or ProjectType(settings.BUILD_DEFAULT_PROJECT_TYPE)
+    effective_name = project_name or infer_project_name(intent, effective_type)
     profile = profile_for(effective_type, headless=settings.BUILD_GAME_HEADLESS)
 
     if isinstance(profile, GameProfile):
@@ -61,13 +84,13 @@ async def run_build_mode(
 
     console.print()
     console.print(Panel(
-        f"[dim]Projeto:[/dim] [bold]{project_name}[/bold]\n"
+        f"[dim]Projeto:[/dim] [bold]{effective_name}[/bold]\n"
         f"[dim]Tipo:[/dim] {effective_type.value}\n"
         f"[dim]Intent:[/dim] [italic]{intent}[/italic]",
         title="[bold cyan]🏗  Modo BUILD[/bold cyan]", border_style="cyan", padding=(1, 2),
     ))
 
-    state = await pipe.run(intent, project_name=project_name, on_stage=_make_stage_printer())
+    state = await pipe.run(intent, project_name=effective_name, on_stage=_make_stage_printer())
 
     artifacts_list = "\n".join(f"   📄 {a.name}" for a in state.artifacts) or "   (nenhum)"
     status_style = (

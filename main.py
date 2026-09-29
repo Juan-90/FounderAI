@@ -58,8 +58,8 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Intent do projeto (usar com: python main.py build \"...\").")
     parser.add_argument("-f", "--file", action="append", dest="files", default=[],
                         metavar="ARQUIVO", help="Arquivo de contexto (repetível).")
-    parser.add_argument("--project-name", default="BarbeariaApp", dest="project_name",
-                        metavar="NOME", help="Nome do projeto no Modo BUILD.")
+    parser.add_argument("--project-name", default=None, dest="project_name",
+                        metavar="NOME", help="Nome do projeto no Modo BUILD (default: inferido do tipo/intent).")
     parser.add_argument("--type", default=None, dest="project_type",
                         choices=["WEB_APP", "INTERNAL_SYSTEM", "GAME"],
                         metavar="TIPO", help="Tipo de projeto no Modo BUILD.")
