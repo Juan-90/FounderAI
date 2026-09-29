@@ -895,3 +895,45 @@ de 7 estágios que separa evidência de inferência e emite um veredito acionáv
 ## Fora de escopo (v4.4.0)
 - Execução automática dos experimentos propostos.
 - Integração do veredito BUILD com o BuildPipeline (transição VALIDATE→BUILD).
+
+
+# ADR-013 — Validate-And-Build Pipeline (v4.5.0)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+A v4.4.0 entregou o VALIDATE e a v4.2/v4.3 o BUILD, mas eram fluxos isolados.
+A v4.5.0 cria a **Ponte Direta**: validar e, se autorizado, construir o MVP na
+mesma missão, com um gate de decisão puro e confirmação humana configurável.
+
+## Decisão
+1. **`ValidateAndBuildPipeline`** orquestra ValidatePipeline → DecisionGate →
+   BuildPipeline, compartilhando um único `mission_id` para persistir artefatos
+   combinados em `artifacts/validate_and_build/<mission_id>/`.
+2. **`DecisionGate` puro** (sem LLM): DISCARD/PIVOT/INVESTIGATE não buildam;
+   BUILD auto-builda só se confiança≥min + sem condições críticas + sem política
+   de confirmação; demais BUILD ficam `needs_human_confirmation=True`.
+3. **`WAITING_HUMAN`** como status explícito: quando o gate exige confirmação e
+   não há callback, o pipeline retorna aguardando; a CLI pergunta `[y/N]`.
+4. **`BuildSeed`** deriva da validação (idea_profile, MVP outline, riscos) e é
+   injetado no `RequirementsAgent` do BUILD, garantindo que a construção respeite
+   o escopo/risco já analisados.
+5. **`composite_report.md`** sintetiza Validação + Gate + Build para auditoria.
+6. Sub-pipelines recebem `mission_id` opcional (mudança aditiva) para co-localizar
+   artefatos; `BuildPipeline.run` aceita `seed`.
+
+## Consequências
+- Positivas: fluxo end-to-end com trilha única; gate testável sem LLM; fundador
+  mantém veto humano quando exigido; construção alinhada à validação.
+- Negativas: `mission_state.json` no diretório VAB é sobrescrito pelo estado
+  composto final (os estados intermediários ficam nos mode_payload aninhados).
+
+## Alternativas rejeitadas
+- Copiar artefatos entre diretórios separados (duplicação e drift).
+- Gate com LLM (não-determinístico e caro; o gate deve ser política pura).
+
+## Fora de escopo (v4.5.0)
+- Persistência de confirmação humana em banco (apenas em mission_state.json).
+- Re-validação automática pós-BUILD.

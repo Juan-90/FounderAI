@@ -35,3 +35,4 @@ class MissionStatus(str, Enum):
     COMPLETED   = "COMPLETED"
     FAILED      = "FAILED"
     ESCALATED   = "ESCALATED"
+    WAITING_HUMAN = "WAITING_HUMAN"

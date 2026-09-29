@@ -44,6 +44,7 @@ class _RichHelpFormatter(argparse.HelpFormatter):
             "    python main.py validate \"Quero validar o EcoTrack-IA...\" -f research.md\n"
             "    python main.py --last\n"
             "    python main.py --history -n 10\n"
+            "    python main.py validate-and-build \"Validar EcoTrack-IA e construir MVP\"\n"
         )
 
 
@@ -65,6 +66,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--type", default=None, dest="project_type",
                         choices=["WEB_APP", "INTERNAL_SYSTEM", "GAME"],
                         metavar="TIPO", help="Tipo de projeto no Modo BUILD.")
+    parser.add_argument("--no-build", action="store_true", dest="no_build",
+                        help="VALIDATE_AND_BUILD: apenas valida, não constrói.")
+    parser.add_argument("--auto-build", action="store_true", dest="auto_build",
+                        help="VALIDATE_AND_BUILD: libera build sem confirmação humana.")
+    parser.add_argument("--no-confirm", action="store_true", dest="no_confirm",
+                        help="VALIDATE_AND_BUILD: não pergunta; se exigir humano, aguarda.")
     parser.add_argument("--history", action="store_true", help="Histórico de deliberações.")
     parser.add_argument("-n", type=int, default=5, dest="history_limit", metavar="N",
                         help="Entradas no histórico (padrão: 5).")

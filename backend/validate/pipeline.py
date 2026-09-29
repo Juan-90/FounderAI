@@ -127,9 +127,10 @@ class ValidatePipeline:
         self,
         request: ValidateRequest,
         on_stage: Optional[StageCallback] = None,
+        mission_id: Optional[str] = None,
     ) -> MissionState:
         state = MissionState(
-            mission_id=uuid.uuid4().hex,
+            mission_id=mission_id or uuid.uuid4().hex,
             project_id=uuid.uuid4().hex,
             mode=ProjectMode.VALIDATE,
             status=MissionStatus.IN_PROGRESS,

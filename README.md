@@ -141,6 +141,19 @@ python main.py validate "Quero validar o EcoTrack-IA: um sistema de rastreamento
 python main.py validate "Sua ideia aqui" -f research.md -f dados.csv
 
 
+## 🧩 Modo VALIDATE_AND_BUILD (v4.5.0 — Ponte Direta)
+
+Valida a ideia e, se o **DecisionGate** autorizar, constrói o MVP na mesma missão.
+
+**Executar:**
+```bash
+python main.py validate-and-build "Validar EcoTrack-IA e construir MVP"
+python main.py validate-and-build "Sua ideia" -f research.md   # com contexto
+python main.py validate-and-build "Ideia" --no-build           # só valida
+python main.py validate-and-build "Ideia" --auto-build         # sem confirmação humana
+python main.py validate-and-build "Ideia" --no-confirm         # não pergunta; aguarda se exigir
+
+
 ## 🧪 Como Executar a Suíte Total de Testes
 
 **Execução padrão (162 testes; testes de LLM real skipam graciosamente):**

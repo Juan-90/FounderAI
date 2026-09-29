@@ -1,10 +1,9 @@
 """
-BuildPipeline — orquestrador do Modo BUILD (v4.3 hotfix: repair gracioso).
+BuildPipeline — orquestrador do Modo BUILD (v4.5.0 — mission_id + BuildSeed).
 
-v4.3 hotfix 2: se o repair do gate estático falhar (erro de LLM Cloud+Local),
-o pipeline NÃO propaga a exceção: registra mode_payload["repair_error"],
-mantém o código atual e segue para a sandbox (estágio 5). O gate é um
-pre-check de economia, não um bloqueio absoluto.
+v4.5.0: run() aceita mission_id (compartilhar diretório de artefatos no
+VALIDATE_AND_BUILD) e seed (BuildSeed repassado ao RequirementsAgent).
+v4.3 hotfix: repair do gate estático é gracioso (não propaga; segue p/ sandbox).
 """
 
 from __future__ import annotations
@@ -28,6 +27,7 @@ from backend.domain.enums import MissionStatus, ProjectMode, ProjectType
 from backend.domain.models import MissionState
 from backend.qa.agent import QAAgent
 from backend.qa.schemas import TDDRequest, TDDResult
+from backend.validate_and_build.schemas import BuildSeed
 
 console = Console(stderr=True)
 
@@ -135,11 +135,7 @@ class BuildPipeline:
             pass
 
     async def _quality_gate(self, state, files, test_files):
-        """
-        Gate estático com reparos. Se o repair falhar (erro de LLM), NÃO
-        propaga: registra repair_error, mantém o código atual e segue adiante
-        (a sandbox é quem valida executabilidade de fato).
-        """
+        """Gate estático com reparos graciosos (não propaga erro de LLM)."""
         result = self._gate.run({**files, **test_files})
         cycles = 0
         while not result.passed and cycles < self._config.STATIC_ANALYSIS_MAX_CYCLES:
@@ -166,9 +162,12 @@ class BuildPipeline:
         intent: str,
         project_name: str = "BarbeariaApp",
         on_stage: Optional[StageCallback] = None,
+        mission_id: Optional[str] = None,
+        seed: Optional[BuildSeed] = None,
     ) -> MissionState:
         state = MissionState(
-            mission_id=uuid4().hex, project_id=uuid4().hex,
+            mission_id=mission_id or uuid4().hex,
+            project_id=uuid4().hex,
             mode=ProjectMode.BUILD, status=MissionStatus.IN_PROGRESS,
             current_stage="init",
             mode_payload={
@@ -181,7 +180,7 @@ class BuildPipeline:
 
         try:
             self._emit(on_stage, 1, "Generating Requirements...")
-            req_md = await self._requirements.generate(intent)
+            req_md = await self._requirements.generate(intent, seed=seed)
             self._save(state, "requirements.md", req_md)
             self._advance(state, "requirements")
 
