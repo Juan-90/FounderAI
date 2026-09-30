@@ -1,0 +1,26 @@
+{
+  "summary": "Sistema de agendamento para barbearias que atende a demanda comprovada e possui um MVP bem definido, visando facilitar a marcação de horários, otimizar a gestão de clientes e melhorar a experiência do usuário.",
+  "assumptions": [
+    "Barbearias têm necessidade de organizar agendamentos de forma digital",
+    "Clientes buscam praticidade ao reservar horários online",
+    "Existe demanda comprovada no mercado de barbearias para soluções de agendamento",
+    "O MVP pode incluir funcionalidades básicas como reserva, cancelamento, confirmação e lembretes",
+    "A solução pode ser monetizada via assinatura mensal ou comissão por reserva"
+  ],
+  "gaps": [
+    "Não há definição clara do público-alvo (tamanho, localização, perfil de barbearia)",
+    "Não foi especificado o problema exato que a solução resolve (ex.: falta de agendamento, perda de clientes, ineficiência operacional)",
+    "Faltam detalhes sobre a proposta de valor e diferenciais competitivos",
+    "Não há modelo de negócio detalhado (assinatura, freemium, comissão, etc.)",
+    "Não foram identificadas restrições técnicas, regulatórias ou de recursos",
+    "Não há descrição de recursos mínimos do MVP e roadmap de desenvolvimento"
+  ],
+  "clarified_fields": {
+    "name": null,
+    "target_audience": null,
+    "problem": null,
+    "solution": null,
+    "business_model": null,
+    "constraints": null
+  }
+}

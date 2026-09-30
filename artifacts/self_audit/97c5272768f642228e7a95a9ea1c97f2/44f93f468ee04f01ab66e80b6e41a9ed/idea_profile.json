@@ -1,0 +1,30 @@
+{
+  "summary": "EcoTrack-IA is an AI‑driven platform designed to help small and medium enterprises (PMEs) monitor, analyze, and reduce their carbon footprint through automated data collection, predictive analytics, and actionable recommendations.",
+  "assumptions": [
+    "PMEs lack efficient tools to track and manage their carbon emissions.",
+    "AI can process diverse operational data to generate accurate carbon footprints and improvement pathways.",
+    "There is regulatory or market pressure driving PMEs to adopt sustainability practices.",
+    "Customers are willing to pay for a subscription or usage‑based model that delivers measurable environmental and cost benefits.",
+    "Data sources (energy usage, supply chain, logistics) are accessible and can be integrated into the platform.",
+    "The platform can scale across different industries and geographic regions.",
+    "The solution can comply with relevant environmental reporting standards (e.g., GHG Protocol)."
+  ],
+  "gaps": [
+    "Specific target audience characteristics (industry, size, geography).",
+    "Clear articulation of the problem PMEs face regarding carbon tracking.",
+    "Detailed description of the solution’s features, data sources, and AI capabilities.",
+    "Business model (subscription, freemium, pay‑per‑report, etc.).",
+    "Constraints such as data privacy, integration complexity, regulatory compliance, and cost of implementation. ",
+    "Name of the product or brand. ",
+    "Contextual files or supporting documents. ",
+    "Project type or development stage. "
+  ],
+  "clarified_fields": {
+    "name": null,
+    "target_audience": null,
+    "problem": null,
+    "solution": null,
+    "business_model": null,
+    "constraints": null
+  }
+}

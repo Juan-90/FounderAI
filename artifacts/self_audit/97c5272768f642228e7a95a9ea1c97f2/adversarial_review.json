@@ -1,0 +1,15 @@
+{
+  "findings": [
+    "lacuna: 'Barbearia (Web)' falhou sem erro registrado",
+    "lacuna: 'EcoTrack-IA' falhou sem erro registrado"
+  ],
+  "severity_counts": {
+    "critical": 0,
+    "major": 2,
+    "minor": 0
+  },
+  "overclaim_detected": false,
+  "consistency_score": 0.6,
+  "notes": "Auditor LLM (local) falhou; heurísticas aplicadas. [INVALID_JSON] Modelo não retornou JSON válido (nem após reparo).\nConteúdo recebido: {\"findings\": [\n  \"A Barbearia (Web) apresenta inconsistências em seu relatório de auto-auditoria. A documentação não demonstra a comprovação da conclusão de cada item, como por exemplo, falta de infor",
+  "adversarial_degraded": true
+}

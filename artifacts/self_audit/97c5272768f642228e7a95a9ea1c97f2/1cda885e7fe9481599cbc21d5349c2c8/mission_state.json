@@ -1,0 +1,51 @@
+{
+  "mission_id": "1cda885e7fe9481599cbc21d5349c2c8",
+  "project_id": "23b73eb29ada435cafe9dd84c959b0a3",
+  "mode": "VALIDATE_AND_BUILD",
+  "status": "COMPLETED",
+  "current_stage": "validate",
+  "mode_payload": {
+    "validation": {
+      "status": "FAILED",
+      "recommendation": {},
+      "evidence_gaps": []
+    },
+    "gate": {
+      "should_build": false,
+      "needs_human_confirmation": false,
+      "reason": "Veredito 'INVESTIGATE' não autoriza prosseguir para o BUILD.",
+      "source_verdict": "INVESTIGATE",
+      "confidence": 0.0,
+      "conditions": []
+    },
+    "build_skipped_reason": "Veredito 'INVESTIGATE' não autoriza prosseguir para o BUILD."
+  },
+  "artifacts": [
+    {
+      "id": "5094a8b333874a91ac036768c9db5aa1",
+      "name": "validation_report.md",
+      "type": "md",
+      "path": "1cda885e7fe9481599cbc21d5349c2c8/validation_report.md",
+      "content": "# Validation Report (FALHA)\n\n## Erro\n```\nValidateAgentError: ContrarianRiskAgent: campos obrigatórios ausentes: skeptic_score\n```\n",
+      "created_at": "2026-09-30T02:09:35.852556Z"
+    },
+    {
+      "id": "ded3c91c2732412d9074b0f886120c78",
+      "name": "gate_decision.json",
+      "type": "json",
+      "path": "1cda885e7fe9481599cbc21d5349c2c8/gate_decision.json",
+      "content": "{\n  \"should_build\": false,\n  \"needs_human_confirmation\": false,\n  \"reason\": \"Veredito 'INVESTIGATE' não autoriza prosseguir para o BUILD.\",\n  \"source_verdict\": \"INVESTIGATE\",\n  \"confidence\": 0.0,\n  \"conditions\": []\n}",
+      "created_at": "2026-09-30T02:09:35.854082Z"
+    },
+    {
+      "id": "b1232fbe7576444eaef015a84a41a469",
+      "name": "composite_report.md",
+      "type": "md",
+      "path": "1cda885e7fe9481599cbc21d5349c2c8/composite_report.md",
+      "content": "# Composite Report (VALIDATE_AND_BUILD)\n\n## Validação\n- Veredito: INVESTIGATE\n- Confiança: 0.00\n\n## Gate Decision\n- should_build: False\n- needs_human_confirmation: False\n- reason: Veredito 'INVESTIGATE' não autoriza prosseguir para o BUILD.\n\n## Build\n- Não executado. Motivo: Veredito 'INVESTIGATE' não autoriza prosseguir para o BUILD.\n",
+      "created_at": "2026-09-30T02:09:35.856099Z"
+    }
+  ],
+  "created_at": "2026-09-30T02:09:29.474001Z",
+  "updated_at": "2026-09-30T02:09:29.474001Z"
+}

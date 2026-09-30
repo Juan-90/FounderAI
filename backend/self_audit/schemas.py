@@ -1,5 +1,5 @@
 """
-Schemas Pydantic V2 do Modo SELF-AUDIT (v4.6.0 + adversarial_degraded).
+Schemas Pydantic V2 do Modo SELF-AUDIT (v4.6 + failure_class v5.0).
 """
 
 from __future__ import annotations
@@ -26,6 +26,10 @@ class AuditMissionResult(BaseModel):
     success: bool
     duration_ms: int
     error: Optional[str] = None
+    failure_class: Optional[Literal["infra", "logic"]] = Field(
+        default=None,
+        description="infra=provedor/modelo; logic=ecossistema (checks/contratos)",
+    )
     objective_checks: dict[str, bool] = Field(default_factory=dict)
     artifacts_path: Optional[str] = None
     notes: Optional[str] = None
@@ -37,9 +41,7 @@ class AdversarialReview(BaseModel):
     overclaim_detected: bool = Field(default=False)
     consistency_score: float = Field(default=1.0, ge=0.0, le=1.0)
     notes: str = ""
-    adversarial_degraded: bool = Field(
-        default=False, description="True se o auditor LLM indisponível usou heurísticas locais"
-    )
+    adversarial_degraded: bool = Field(default=False)
 
 
 class SelfAuditScorecard(BaseModel):
@@ -50,6 +52,7 @@ class SelfAuditScorecard(BaseModel):
     vab_success_rate: Optional[float] = None
     objective_checks_passed: int
     objective_checks_total: int
+    infra_failures: int = Field(default=0)
     adversarial_findings: list[str] = Field(default_factory=list)
     critical_findings: list[str] = Field(default_factory=list)
     overall_verdict: Literal["HEALTHY", "DEGRADED", "CRITICAL"]

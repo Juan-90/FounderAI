@@ -1,9 +1,12 @@
 """
-ScorecardSynthesizer — calcula a saúde do sistema (v4.6.0).
+ScorecardSynthesizer — saúde do sistema (v5.0 infra-aware).
 
-  • HEALTHY:  success_rate >= 0.85 e zero achados críticos (e sem moderados).
-  • DEGRADED: 0.60 <= success_rate < 0.85 ou achados moderados.
-  • CRITICAL: success_rate < 0.60 ou achados críticos de integridade.
+  • CRITICAL: achados críticos de integridade OU taxa de LÓGICA < 0.60.
+  • DEGRADED: taxa global < 0.85, achados moderados, ou falhas de INFRA.
+  • HEALTHY:  taxa >= 0.85, sem críticos/moderados, sem falhas de infra.
+
+Falhas de provedor/modelo (infra) NÃO zeram o veredito para CRITICAL — elas
+indicam "provedor estressado", não regressão do ecossistema.
 """
 
 from __future__ import annotations
@@ -32,6 +35,11 @@ class ScorecardSynthesizer:
         succ = sum(1 for r in results if r.success)
         rate = (succ / total) if total else 0.0
 
+        infra_failures = sum(1 for r in results if r.failure_class == "infra")
+        logic_failures = sum(1 for r in results if r.failure_class == "logic")
+        logic_total = total - infra_failures
+        logic_rate = ((logic_total - logic_failures) / logic_total) if logic_total else 1.0
+
         def mrate(mode: ProjectMode) -> Optional[float]:
             subset = [r for r in results if r.mode == mode]
             if not subset:
@@ -45,9 +53,9 @@ class ScorecardSynthesizer:
         critical_findings = review.findings[:critical_count] if critical_count else []
         moderate = review.severity_counts.get("major", 0) > 0
 
-        if total == 0 or rate < 0.60 or critical_findings:
+        if total == 0 or critical_findings or logic_rate < 0.60:
             verdict = "CRITICAL"
-        elif rate >= 0.85 and not critical_findings and not moderate:
+        elif rate >= 0.85 and not critical_findings and not moderate and infra_failures == 0:
             verdict = "HEALTHY"
         else:
             verdict = "DEGRADED"
@@ -55,7 +63,7 @@ class ScorecardSynthesizer:
         confidence = round(_clamp(rate * review.consistency_score), 3)
         summary = (
             f"{succ}/{total} missões OK (taxa {rate:.0%}); veredito {verdict}; "
-            f"{len(review.findings)} achado(s) adversarial(is)"
+            f"{infra_failures} falha(s) de infra; {len(review.findings)} achado(s)"
             + (" [auditor degradado]" if review.adversarial_degraded else "")
             + "."
         )
@@ -65,6 +73,7 @@ class ScorecardSynthesizer:
             validate_success_rate=mrate(ProjectMode.VALIDATE),
             vab_success_rate=mrate(ProjectMode.VALIDATE_AND_BUILD),
             objective_checks_passed=checks_passed, objective_checks_total=checks_total,
+            infra_failures=infra_failures,
             adversarial_findings=list(review.findings), critical_findings=critical_findings,
             overall_verdict=verdict, confidence=confidence, summary=summary,
         )

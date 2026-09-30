@@ -1057,3 +1057,73 @@ ponta antes de declarar GA, além de polimento de CLI/erros para uso por não-de
 ## Fora de escopo (v5.0)
 - Golden Missions com auto-correção de falhas (apenas reporta).
 - Dashboard web do scorecard GA.
+
+
+# 🎉 Release Notes — FounderAI v5.0.0 GA
+
+**Data:** 27/09/2026 · **Status:** General Availability (congelada — ver ADR-017)
+
+A v5.0 marca a transição do FounderAI de "conjunto de agentes" para um
+**Sistema Operacional de Projetos** completo, com regressão canônica (Golden
+Missions), CLI polida e auto-auditoria.
+
+---
+
+## 🧬 Evolução v1.0 → v5.0
+
+| Versão | Marco | Destaques |
+|---|---|---|
+| **v1.0** | Council inicial | Jurados de IA, veredito APPROVE/VETO, score |
+| **v2.0** | Council + histórico | Persistência de deliberações, reexecução (`--last/--rerun`) |
+| **v3.0** | Multi-turno + contexto | Turno 0/1 com esclarecimentos; anexos `-f` com limites seguros |
+| **v4.0** | LLM agnóstico + Sandbox | `LLMClient` multi-provedor c/ fallback; sandbox Docker hardenizada; `TDDLoop` self-healing |
+| **v4.1** | Guardrails + telemetria | `StaticAnalysisGate` (ruff/mypy); telemetria RAM/CPU; Escalation Webhook |
+| **v4.2** | BUILD Web | `BuildPipeline` 6 estágios; `ArtifactManager`; caso Barbearia |
+| **v4.3** | BUILD Game | `GameProfile` (pygame headless); CLI `--type GAME`; caso Asteroids |
+| **v4.4** | VALIDATE | 7 agentes analíticos; `DecisionGate`; vereditos INVESTIGATE/BUILD/PIVOT/DISCARD |
+| **v4.5** | VALIDATE_AND_BUILD | Ponte direta; `BuildSeed`; confirmação humana (`WAITING_HUMAN`) |
+| **v4.6** | SELF-AUDIT | `AuditRunner` + objective checks; `AdversarialAuditor` (Creator≠Auditor); scorecard |
+| **v4.7** | DISCOVER | Ranking por pesos explícitos; `OpportunityCritic`; handoff → VALIDATE |
+| **v5.0** | **GA** | Golden Missions (G1–G7); polimento CLI; checagem de ambiente; congelamento |
+
+---
+
+# ADR-017 — GA Release Freeze (v5.0.0)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO (congelamento em vigor)
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+> Nota de numeração: o `ADR-016` foi usado para as Golden Missions
+> (`ADR-016-Golden-Missions-GA.md`, Etapa 1). O congelamento GA é formalizado
+> aqui como `ADR-017` para manter a sequência íntegra.
+
+## Contexto
+A v5.0 entregou o ecossistema completo (6 modos + Council) com regressão
+canônica. Para estabilizar a base e permitir adoção, é preciso **congelar** a
+superfície pública (CLI, schemas, artefatos, contratos de pipeline) e definir
+regras claras para mudanças futuras.
+
+## Decisão
+1. **Congela-se** na tag `v5.0.0`: CLI (comandos/flags/exit-codes), schemas
+   Pydantic públicos, layout de `artifacts/`, contratos dos pipelines e o pack
+   das 7 Golden Missions.
+2. **Permitido pós-freeze** (sem novo ADR): correção de bugs que não alterem
+   contratos, melhorias de mensagem/log, ajustes de prompt que não mudem schemas.
+3. **Exige novo ADR**: qualquer mudança de contrato (campos de schema, flags de
+   CLI, layout de artefatos, adição/remoção de Golden Mission, thresholds de
+   gate/scorecard).
+4. **Critérios de saída do freeze** (para v5.1): suíte padrão verde; bateria
+   `--run-golden` 7/7; `self-audit` nunca `CRITICAL`; `.env.example` sincronizado.
+5. **Rollback:** qualquer regressão GA reverte para a tag `v5.0.0` (artefatos e
+   histórico são compatíveis entre hotfixes).
+
+## Consequências
+- Positivas: base estável para usuários; evolução disciplinada; regressão
+  detectável a cada mudança via Golden Missions.
+- Negativas: mudanças de contrato ficam mais lentas (exigem ADR) — aceitável
+  para uma release GA.
+
+## Fora do freeze
+- Experimentos da v5.1+ (pygame/display, evidências web, dashboard, RAG), que
+  viverão em branches/ADRs próprios.

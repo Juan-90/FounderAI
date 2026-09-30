@@ -1,8 +1,9 @@
 """
-AuditRunner — executa o pack canônico (v4.6.0 + run_missions).
+AuditRunner — executa o pack canônico e consolida o scorecard (v5.0).
 
-run_missions(): executa missões e retorna resultados (sem agregar/persistir),
-para uso pelo SelfAuditPipeline. run(): retrocompatível (agrega + persiste).
+v5.0 hotfix: captura o error real do mode_payload e classifica cada falha como
+infra (provedor/modelo) vs logic (ecossistema), para o scorecard não tratar
+instabilidade de LLM como regressão crítica.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Literal, Optional, Protocol
 
 from backend.build.pipeline import BuildPipeline
 from backend.core.config import Settings, settings
@@ -31,6 +32,12 @@ from backend.validate_and_build.pipeline import ValidateAndBuildPipeline
 from backend.validate_and_build.schemas import ValidateAndBuildRequest
 
 VALID_VERDICTS = {"INVESTIGATE", "BUILD", "PIVOT", "DISCARD"}
+
+# Marcadores de falha de provedor/modelo (não-lógica)
+_INFRA_MARKERS = (
+    "[TIMEOUT]", "[UNAVAILABLE]", "[HTTP_ERROR]", "[INVALID_JSON]",
+    "LLMProviderError", "ValidateAgentError", "BuildAgentError",
+)
 
 BuildFactory = Callable[[Optional[ProjectType]], Any]
 
@@ -75,6 +82,13 @@ class LLMAdversarialReviewer:
             consistency_score=float(data.get("consistency_score", 1.0)),
             notes=str(data.get("notes", "")),
         )
+
+
+def _classify(error: Optional[str]) -> Literal["infra", "logic"]:
+    """Classifica a falha: infra (provedor/modelo) vs logic (ecossistema)."""
+    if not error:
+        return "logic"
+    return "infra" if any(m in error for m in _INFRA_MARKERS) else "logic"
 
 
 class AuditRunner:
@@ -157,7 +171,6 @@ class AuditRunner:
         ))
 
     async def run_missions(self, request: SelfAuditRequest) -> list[AuditMissionResult]:
-        """Executa as missões selecionadas e retorna resultados (sem agregar)."""
         results: list[AuditMissionResult] = []
         for mission in select_missions(request):
             started = time.perf_counter()
@@ -170,13 +183,21 @@ class AuditRunner:
                 checks = self._objective_checks(mission, state, self._root)
                 success = all(checks.values())
                 artifacts_path = str(self._root / state.mission_id)
+                if not success:
+                    error = state.mode_payload.get("error")
             except Exception as exc:
                 success = False
                 error = f"{type(exc).__name__}: {exc}"
+
+            failure_class: Literal["infra", "logic"] | None = (
+                None if success else _classify(error)
+            )
             results.append(AuditMissionResult(
                 mission_name=mission.mission_name, mode=mission.mode, success=success,
                 duration_ms=int((time.perf_counter() - started) * 1000),
-                error=error, objective_checks=checks, artifacts_path=artifacts_path,
+                error=error,
+                failure_class=failure_class,
+                objective_checks=checks, artifacts_path=artifacts_path,
             ))
             if request.fail_fast and not success:
                 break
@@ -213,11 +234,13 @@ class AuditRunner:
                 scorecard.model_dump_json(indent=2), encoding="utf-8"
             )
             lines = ["# Self-Audit Report", "", f"- Veredito: {scorecard.overall_verdict}",
-                     f"- Sucesso: {scorecard.success_rate:.0%}", f"- {scorecard.summary}", "",
-                     "## Missões"]
+                     f"- Sucesso: {scorecard.success_rate:.0%}",
+                     f"- Falhas de infra: {scorecard.infra_failures}",
+                     f"- {scorecard.summary}", "", "## Missões"]
             for r in results:
+                tag = "OK" if r.success else f"FAIL({r.failure_class or '?'}"
                 lines.append(
-                    f"- [{'OK' if r.success else 'FAIL'}] {r.mission_name} ({r.mode.value})"
+                    f"- [{tag}] {r.mission_name} ({r.mode.value})"
                     + (f" — {r.error}" if r.error else "")
                 )
             (self._root / "self_audit_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

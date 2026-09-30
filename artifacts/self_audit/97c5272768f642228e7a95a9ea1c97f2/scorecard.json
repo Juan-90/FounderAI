@@ -1,0 +1,17 @@
+{
+  "total_missions": 3,
+  "success_rate": 0.333,
+  "build_success_rate": 0.0,
+  "validate_success_rate": 0.0,
+  "vab_success_rate": 1.0,
+  "objective_checks_passed": 9,
+  "objective_checks_total": 12,
+  "adversarial_findings": [
+    "lacuna: 'Barbearia (Web)' falhou sem erro registrado",
+    "lacuna: 'EcoTrack-IA' falhou sem erro registrado"
+  ],
+  "critical_findings": [],
+  "overall_verdict": "CRITICAL",
+  "confidence": 0.2,
+  "summary": "1/3 missões OK (taxa 33%); veredito CRITICAL; 2 achado(s) adversarial(is) [auditor degradado]."
+}
