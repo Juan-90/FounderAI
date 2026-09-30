@@ -937,3 +937,43 @@ mesma missão, com um gate de decisão puro e confirmação humana configurável
 ## Fora de escopo (v4.5.0)
 - Persistência de confirmação humana em banco (apenas em mission_state.json).
 - Re-validação automática pós-BUILD.
+
+
+# ADR-014 — Self-Audit Mode (v4.6.0)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+O FounderAI passou a executar pipelines autônomos (BUILD/VALIDATE/VAB). É preciso
+um mecanismo que **audite a si próprio** de forma determinística, detectando
+regressões, overclaims e incoerências sem depender de julgamento humano.
+
+## Decisão
+1. **Pack canônico** de missões por modo (Barbearia/Asteroids; EcoTrack/Fraca/
+   Ambígua; Build-Aprovado/Discard) executado pelo `AuditRunner`, que reutiliza
+   os 3 pipelines reais via injeção.
+2. **Objective checks determinísticos** (status, artefatos em state+disco,
+   report não-vazio, veredito válido, gate válido) — a base da verdade; o LLM
+   nunca decide esses checks.
+3. **Creator ≠ Auditor:** o `AdversarialAuditor` usa um provedor/modelo
+   *diferente* do primário. Sem segundo provedor ativo, marca
+   `adversarial_degraded=True` e aplica heurísticas locais (overclaim,
+   incoerência, lacunas) — nunca falha silencioso.
+4. **`ScorecardSynthesizer`** com limiares: HEALTHY ≥0.85 sem críticos;
+   DEGRADED 0.60–0.85 ou moderados; CRITICAL <0.60 ou críticos.
+5. **`SelfAuditPipeline`** persiste tudo em `artifacts/self_audit/<audit_id>/`
+   (scorecard.json, adversarial_review.json, self_audit_report.md).
+6. CLI `python main.py self-audit` com `--no-build/--no-validate/--no-vab/
+   --max-per-mode`.
+
+## Consequências
+- Positivas: regressão detectável em CI sem LLM; auditoria reproduzível;
+  separação criador/auditor reduz viés de auto-avaliação.
+- Negativas: custo de executar N missões por auditoria; heurísticas degradadas
+  são menos ricas que um auditor LLM.
+
+## Fora de escopo (v4.6.0)
+- Auto-correção a partir do scorecard (apenas reporta).
+- Auditoria de segurança/código-fonte (foco em comportamento de pipelines).

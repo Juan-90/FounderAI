@@ -72,6 +72,12 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="VALIDATE_AND_BUILD: libera build sem confirmação humana.")
     parser.add_argument("--no-confirm", action="store_true", dest="no_confirm",
                         help="VALIDATE_AND_BUILD: não pergunta; se exigir humano, aguarda.")
+    parser.add_argument("--no-validate", action="store_true", dest="no_validate",
+                        help="SELF-AUDIT: exclui missões VALIDATE.")
+    parser.add_argument("--no-vab", action="store_true", dest="no_vab",
+                        help="SELF-AUDIT: exclui missões VALIDATE_AND_BUILD.")
+    parser.add_argument("--max-per-mode", type=int, default=3, dest="max_per_mode",
+                        metavar="N", help="SELF-AUDIT: máx. de missões por modo.")
     parser.add_argument("--history", action="store_true", help="Histórico de deliberações.")
     parser.add_argument("-n", type=int, default=5, dest="history_limit", metavar="N",
                         help="Entradas no histórico (padrão: 5).")
@@ -502,6 +508,15 @@ async def main() -> None:
     context_block, included_files = _prepare_context(prev_files)
     _render_header(mission, included_files)
     await _run_deliberation(mission, context_block, included_files)
+
+        # ── Modo SELF-AUDIT (v4.6.0) ──
+    if args.mission == "self-audit":
+        from backend.self_audit.cli import run_self_audit_mode
+        code = await run_self_audit_mode(
+            no_build=args.no_build, no_validate=args.no_validate,
+            no_vab=args.no_vab, max_per_mode=args.max_per_mode,
+        )
+        sys.exit(code)
 
 
 if __name__ == "__main__":

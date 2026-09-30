@@ -1,5 +1,5 @@
 """
-Schemas Pydantic V2 do Modo SELF-AUDIT (v4.6.0).
+Schemas Pydantic V2 do Modo SELF-AUDIT (v4.6.0 + adversarial_degraded).
 """
 
 from __future__ import annotations
@@ -12,19 +12,15 @@ from backend.domain.enums import ProjectMode
 
 
 class SelfAuditRequest(BaseModel):
-    """Configuração de uma execução de auditoria interna."""
-
     include_build: bool = Field(default=True)
     include_validate: bool = Field(default=True)
     include_validate_and_build: bool = Field(default=True)
     max_missions_per_mode: int = Field(default=3, ge=1)
     adversarial_enabled: bool = Field(default=True)
-    fail_fast: bool = Field(default=False, description="Interrompe ao primeiro failure")
+    fail_fast: bool = Field(default=False)
 
 
 class AuditMissionResult(BaseModel):
-    """Resultado de uma missão canônica auditada."""
-
     mission_name: str
     mode: ProjectMode
     success: bool
@@ -36,18 +32,17 @@ class AuditMissionResult(BaseModel):
 
 
 class AdversarialReview(BaseModel):
-    """Revisão adversarial (auditor LLM) sobre o scorecard."""
-
     findings: list[str] = Field(default_factory=list)
     severity_counts: dict[str, int] = Field(default_factory=dict)
     overclaim_detected: bool = Field(default=False)
     consistency_score: float = Field(default=1.0, ge=0.0, le=1.0)
     notes: str = ""
+    adversarial_degraded: bool = Field(
+        default=False, description="True se o auditor LLM indisponível usou heurísticas locais"
+    )
 
 
 class SelfAuditScorecard(BaseModel):
-    """Scorecard consolidado da auditoria."""
-
     total_missions: int
     success_rate: float
     build_success_rate: Optional[float] = None

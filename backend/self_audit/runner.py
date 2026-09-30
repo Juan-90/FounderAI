@@ -1,15 +1,8 @@
 """
-AuditRunner — executa o pack canônico e consolida o scorecard (v4.6.0).
+AuditRunner — executa o pack canônico (v4.6.0 + run_missions).
 
-Reutiliza BuildPipeline / ValidatePipeline / ValidateAndBuildPipeline via injeção
-(testável sem LLM/Docker). Aplica objective checks determinísticos após cada missão:
-  • status final == COMPLETED
-  • artefatos obrigatórios presentes (state.artifacts; disco SOMENTE se o
-    diretório da missão existir — pipelines reais gravam, fakes não)
-  • relatório final presente e não-vazio
-  • VALIDATE/VAB: veredito ∈ {INVESTIGATE,BUILD,PIVOT,DISCARD}; VAB: gate válido
-
-A revisão adversarial (LLM) é opcional/injetável e degrada graciosamente.
+run_missions(): executa missões e retorna resultados (sem agregar/persistir),
+para uso pelo SelfAuditPipeline. run(): retrocompatível (agrega + persiste).
 """
 
 from __future__ import annotations
@@ -57,8 +50,6 @@ class AdversarialReviewerLike(Protocol):
 
 
 class LLMAdversarialReviewer:
-    """Auditor adversarial baseado em LLM (best-effort)."""
-
     def __init__(self, client: Any | None = None, config: Settings | None = None) -> None:
         self._config = config if config is not None else settings
         if client is not None:
@@ -69,11 +60,7 @@ class LLMAdversarialReviewer:
 
     async def review(self, context: dict[str, Any]) -> AdversarialReview:
         data = await self._client.complete_json(
-            system_prompt=(
-                "Você é um auditor adversarial cético. Analise os resultados da "
-                "auto-auditoria e aponte inconsistências, overclaims e falhas. "
-                "Responda APENAS JSON válido."
-            ),
+            system_prompt=("Você é um auditor adversarial cético. Responda APENAS JSON válido."),
             user_prompt=(
                 "RESULTADOS:\n" + json.dumps(context, ensure_ascii=False) + "\n\n"
                 'Retorne: {"findings": ["..."], "severity_counts": {"critical": 0, '
@@ -91,8 +78,6 @@ class LLMAdversarialReviewer:
 
 
 class AuditRunner:
-    """Executa missões canônicas e consolida o SelfAuditScorecard."""
-
     def __init__(
         self,
         config: Settings | None = None,
@@ -121,7 +106,6 @@ class AuditRunner:
             )
         return factory
 
-    # ── Objective checks ──
     def _extract_verdict(self, state: MissionState) -> str:
         vp = state.mode_payload
         gate = vp.get("gate") or {}
@@ -136,8 +120,6 @@ class AuditRunner:
 
         saved = {a.name for a in state.artifacts}
         names_ok = set(mission.required_artifacts) <= saved
-        # Checagem em disco SOMENTE se o diretório da missão existir
-        # (pipelines reais gravam; fakes de teste não).
         disk_ok = True
         if root is not None:
             mdir = root / state.mission_id
@@ -160,7 +142,6 @@ class AuditRunner:
                 checks["gate_valid"] = isinstance(gate.get("should_build"), bool)
         return checks
 
-    # ── Execução de missão ──
     async def _run_mission(self, mission: CanonicalMission) -> MissionState:
         mid = uuid.uuid4().hex
         if mission.mode == ProjectMode.BUILD:
@@ -175,57 +156,10 @@ class AuditRunner:
             idea_text=mission.intent, require_human_confirmation=False,
         ))
 
-    # ── Consolidação ──
-    def _aggregate(
-        self, results: list[AuditMissionResult], review: AdversarialReview
-    ) -> SelfAuditScorecard:
-        total = len(results)
-        succ = sum(1 for r in results if r.success)
-        success_rate = (succ / total) if total else 0.0
-
-        def rate(mode: ProjectMode) -> Optional[float]:
-            subset = [r for r in results if r.mode == mode]
-            if not subset:
-                return None
-            return sum(1 for r in subset if r.success) / len(subset)
-
-        checks_passed = sum(sum(r.objective_checks.values()) for r in results)
-        checks_total = sum(len(r.objective_checks) for r in results)
-
-        critical_count = review.severity_counts.get("critical", 0)
-        critical_findings = review.findings[:critical_count] if critical_count else []
-
-        if total == 0:
-            verdict = "CRITICAL"
-        elif success_rate >= 0.8 and not critical_findings and not review.overclaim_detected:
-            verdict = "HEALTHY"
-        elif success_rate >= 0.5 and not critical_findings:
-            verdict = "DEGRADED"
-        else:
-            verdict = "CRITICAL"
-
-        confidence = round(max(0.0, min(1.0, success_rate * review.consistency_score)), 3)
-        summary = (
-            f"{succ}/{total} missões OK (taxa {success_rate:.0%}); "
-            f"veredito {verdict}; {len(review.findings)} achado(s) adversarial(is)."
-        )
-        return SelfAuditScorecard(
-            total_missions=total, success_rate=round(success_rate, 3),
-            build_success_rate=rate(ProjectMode.BUILD),
-            validate_success_rate=rate(ProjectMode.VALIDATE),
-            vab_success_rate=rate(ProjectMode.VALIDATE_AND_BUILD),
-            objective_checks_passed=int(checks_passed), objective_checks_total=int(checks_total),
-            adversarial_findings=list(review.findings), critical_findings=critical_findings,
-            overall_verdict=verdict, confidence=confidence, summary=summary,
-        )
-
-    async def run(self, request: SelfAuditRequest | None = None) -> SelfAuditScorecard:
-        req = request or SelfAuditRequest(
-            max_missions_per_mode=self._config.SELF_AUDIT_MAX_MISSIONS_PER_MODE,
-            adversarial_enabled=self._config.SELF_AUDIT_ADVERSARIAL_ENABLED,
-        )
+    async def run_missions(self, request: SelfAuditRequest) -> list[AuditMissionResult]:
+        """Executa as missões selecionadas e retorna resultados (sem agregar)."""
         results: list[AuditMissionResult] = []
-        for mission in select_missions(req):
+        for mission in select_missions(request):
             started = time.perf_counter()
             error: str | None = None
             checks: dict[str, bool] = {}
@@ -239,14 +173,25 @@ class AuditRunner:
             except Exception as exc:
                 success = False
                 error = f"{type(exc).__name__}: {exc}"
-
             results.append(AuditMissionResult(
                 mission_name=mission.mission_name, mode=mission.mode, success=success,
                 duration_ms=int((time.perf_counter() - started) * 1000),
                 error=error, objective_checks=checks, artifacts_path=artifacts_path,
             ))
-            if req.fail_fast and not success:
+            if request.fail_fast and not success:
                 break
+        return results
+
+    def _aggregate(self, results, review) -> SelfAuditScorecard:
+        from backend.self_audit.scorecard import ScorecardSynthesizer
+        return ScorecardSynthesizer().synthesize(results, review)
+
+    async def run(self, request: SelfAuditRequest | None = None) -> SelfAuditScorecard:
+        req = request or SelfAuditRequest(
+            max_missions_per_mode=self._config.SELF_AUDIT_MAX_MISSIONS_PER_MODE,
+            adversarial_enabled=self._config.SELF_AUDIT_ADVERSARIAL_ENABLED,
+        )
+        results = await self.run_missions(req)
 
         review = AdversarialReview()
         if req.adversarial_enabled and self._reviewer is not None:

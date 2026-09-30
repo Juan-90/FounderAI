@@ -154,6 +154,19 @@ python main.py validate-and-build "Ideia" --auto-build         # sem confirmaç�
 python main.py validate-and-build "Ideia" --no-confirm         # não pergunta; aguarda se exigir
 
 
+## 🩺 Modo SELF-AUDIT (v4.6.0 — Auditoria Interna)
+
+Executa um pack de missões canônicas nos 3 modos, aplica objective checks
+determinísticos, passa por um **auditor adversarial** (Creator ≠ Auditor) e
+consolida um Scorecard `HEALTHY / DEGRADED / CRITICAL`.
+
+**Executar:**
+```bash
+python main.py self-audit
+python main.py self-audit --no-vab --max-per-mode 2   # reduz escopo
+python main.py self-audit --no-build --no-validate    # só VAB
+
+
 ## 🧪 Como Executar a Suíte Total de Testes
 
 **Execução padrão (162 testes; testes de LLM real skipam graciosamente):**
