@@ -180,6 +180,17 @@ python main.py discover "Tema aqui" --max 6                 # limita o ranking
 python main.py discover "Tema aqui" --handoff <opp_id>      # envia ao VALIDATE
 
 
+## 🏅 Golden Missions (v5.0.0 GA)
+
+Suíte canônica de regressão com 7 missões (G1–G7) cobrindo todos os modos,
+incluindo casos negativos (ideia fraca bloqueada no gate).
+
+**Executar:**
+```bash
+python main.py golden-missions        # produção (LLM/Docker reais)
+pytest -q --run-golden                # suíte golden via pytest
+
+
 ## 🧪 Como Executar a Suíte Total de Testes
 
 **Execução padrão (162 testes; testes de LLM real skipam graciosamente):**

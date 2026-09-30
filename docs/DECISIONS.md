@@ -1021,3 +1021,39 @@ transparente e filtro anti-clichê, alimentando o VALIDATE com as melhores candi
 ## Fora de escopo (v4.7.0)
 - Busca de evidências externas (web scraping) para `evidence_level`.
 - Re-ranking automático após resultados do VALIDATE.
+
+
+# ADR-016 — Golden Missions & GA Polish (v5.0.0)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+Com 6 modos operacionais (Council, BUILD, VALIDATE, VAB, SELF-AUDIT, DISCOVER),
+faltava uma **suíte canônica de regressão** que prove o ecossistema de ponta a
+ponta antes de declarar GA, além de polimento de CLI/erros para uso por não-devs.
+
+## Decisão
+1. **7 Golden Missions** (G1–G7) cobrindo cada modo, incluindo casos negativos
+   (G3 ideia fraca deve ser bloqueada no gate) e os dois paths de BUILD (Web/Game).
+2. **`GoldenRunner`** com dispatcher injetável: fakes em CI unitário, pipelines
+   reais em produção/`--run-golden`. Persistência isolada em
+   `artifacts/golden/<mission_id>/` + consolidação em `artifacts/golden/<run_id>/`.
+3. **Marker `@pytest.mark.golden`** + flag `--run-golden` (não polui CI padrão).
+4. **Polimento CLI**: `backend/cli.py` com `friendly_error()` (sem stack trace)
+   e `summary_panel()`; exit codes previsíveis (0 sucesso / 1 falha).
+5. **Checagem de ambiente**: `Settings.environment_warnings()` avisa no startup
+   quando PRIMARY/FALLBACK estão sem chave ou ambos locais sem Ollama.
+6. **Padrão de artefatos** fixo: `artifacts/{discover,validate,build,
+   validate_and_build,self_audit,golden}/`.
+
+## Consequências
+- Positivas: regressão GA reproduzível; UX de CLI amigável; diagnóstico de
+  ambiente proativo.
+- Negativas: executar as 7 golden reais tem custo de LLM/Docker (mitigado por
+  rodar sob demanda com `--run-golden`).
+
+## Fora de escopo (v5.0)
+- Golden Missions com auto-correção de falhas (apenas reporta).
+- Dashboard web do scorecard GA.

@@ -1,9 +1,9 @@
 """
-Configuração global do Pytest para o FounderAI.
+Configuração de testes do FounderAI.
 
-Registra markers customizados:
-  • real_llm: testes que exigem LLM real (Groq/OpenRouter/OpenAI/Ollama funcional).
-    Skipped por padrão em CI sem credenciais. Use `pytest --run-real-llm` para executar.
+Markers:
+  • real_llm: exige LLM funcional (rodar com --run-real-llm).
+  • golden:   suíte Golden Missions real (rodar com --run-golden).
 """
 
 from __future__ import annotations
@@ -12,29 +12,24 @@ import pytest
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption(
-        "--run-real-llm",
-        action="store_true",
-        default=False,
-        help="Executa testes marcados com @pytest.mark.real_llm (exige LLM real).",
-    )
+    parser.addoption("--run-real-llm", action="store_true", default=False,
+                     help="Executa testes que exigem LLM real.")
+    parser.addoption("--run-golden", action="store_true", default=False,
+                     help="Executa a suíte Golden Missions real.")
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line(
-        "markers",
-        "real_llm: marca testes que dependem de LLM real (Groq/OpenRouter/Ollama); "
-        "skipped por padrão, execute com --run-real-llm.",
-    )
+    config.addinivalue_line("markers", "real_llm: exige LLM real (--run-real-llm)")
+    config.addinivalue_line("markers", "golden: suíte Golden Missions real (--run-golden)")
 
 
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
-    """Pula testes real_llm se a flag não foi passada."""
-    if config.getoption("--run-real-llm"):
-        return
-    skip = pytest.mark.skip(reason="Requer --run-real-llm para executar (LLM real).")
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    run_real = config.getoption("--run-real-llm")
+    run_golden = config.getoption("--run-golden")
+    skip_real = pytest.mark.skip(reason="requer --run-real-llm")
+    skip_golden = pytest.mark.skip(reason="requer --run-golden")
     for item in items:
-        if "real_llm" in item.keywords:
-            item.add_marker(skip)
+        if "real_llm" in item.keywords and not run_real:
+            item.add_marker(skip_real)
+        if "golden" in item.keywords and not run_golden:
+            item.add_marker(skip_golden)

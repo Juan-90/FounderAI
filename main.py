@@ -1,23 +1,24 @@
 """
-Fundador IA v4.7.0 — CLI Principal.
+Fundador IA v5.0.0 GA — CLI Principal.
 
 Modos:
-  • (default)      Deliberação multi-turno do Conselho (Turno 0 + Turno 1)
-  • build          Modo BUILD (Web/Game)            [v4.2/v4.3]
-  • validate       Modo VALIDATE                    [v4.4]
-  • validate-and-build  Ponte Direta                [v4.5]
-  • self-audit     Auditoria Interna                [v4.6]
-  • discover       Mapeamento de Oportunidades      [v4.7]
+  • (default)           Deliberação multi-turno do Conselho (Turno 0 + Turno 1)
+  • build               Modo BUILD (Web/Game)             [v4.2/v4.3]
+  • validate            Modo VALIDATE                     [v4.4]
+  • validate-and-build  Ponte Direta                      [v4.5]
+  • self-audit          Auditoria Interna                 [v4.6]
+  • discover            Mapeamento de Oportunidades       [v4.7]
+  • golden-missions     Regressão GA (7 missões)          [v5.0]
 
 Uso:
     python main.py                              Menu interativo
-    python main.py "Missão"                     Deliberação direta
-    python main.py "Missão" -f README.md        Com contexto
+    python main.py "Missão" [-f arq]            Deliberação direta
     python main.py build "Intent" [--type GAME] [--project-name NOME]
     python main.py validate "Intent" [-f arq]
     python main.py validate-and-build "Intent" [--no-build|--auto-build|--no-confirm]
     python main.py self-audit [--no-build|--no-validate|--no-vab|--max-per-mode N]
     python main.py discover "Tema" [--max N] [--handoff OPP_ID]
+    python main.py golden-missions
     python main.py --last / --rerun ID / --history [-n N]
 """
 
@@ -49,7 +50,7 @@ _CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 class _RichHelpFormatter(argparse.HelpFormatter):
     def format_help(self) -> str:
         return (
-            "\n  🏛  Fundador IA v4.7.0 — Conselho Consultivo Artificial\n"
+            "\n  🏛  Fundador IA v5.0.0 GA — Conselho Consultivo Artificial\n"
             "  ─────────────────────────────────────────────────────\n\n"
             + super().format_help()
             + "\n  Exemplos:\n"
@@ -60,6 +61,7 @@ class _RichHelpFormatter(argparse.HelpFormatter):
             "    python main.py validate-and-build \"Validar EcoTrack-IA e construir MVP\"\n"
             "    python main.py self-audit --max-per-mode 2\n"
             "    python main.py discover \"Oportunidades de software para barbearias no Brasil\" --max 6\n"
+            "    python main.py golden-missions\n"
             "    python main.py --last\n"
             "    python main.py --history -n 10\n"
         )
@@ -68,13 +70,13 @@ class _RichHelpFormatter(argparse.HelpFormatter):
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python main.py",
-        description="Avalia, descobre, valida, constrói e audita missões de produto via IA.",
+        description="Avalia, descobre, valida, constrói, audita e regressa missões de produto via IA.",
         formatter_class=_RichHelpFormatter,
         add_help=True,
     )
     parser.add_argument("mission", nargs="?", default=None,
                         help="'build' | 'validate' | 'validate-and-build' | 'self-audit' | "
-                             "'discover' | ou o texto da missão de deliberação.")
+                             "'discover' | 'golden-missions' | ou o texto da missão de deliberação.")
     parser.add_argument("build_intent", nargs="?", default=None,
                         help="Intent/tema do projeto (usar com build/validate/.../discover).")
 
@@ -146,7 +148,7 @@ def _interactive_menu() -> argparse.Namespace:
     console.print()
     console.print(
         Panel(
-            "[bold cyan]Fundador IA v4.7.0[/bold cyan] — Conselho Consultivo Artificial\n\n"
+            "[bold cyan]Fundador IA v5.0.0 GA[/bold cyan] — Conselho Consultivo Artificial\n\n"
             "  [bold][1][/bold]  Nova Missão (deliberação)\n"
             "  [bold][2][/bold]  Reexecutar Última Deliberação\n"
             "  [bold][3][/bold]  Ver Histórico de Decisões\n"
@@ -336,7 +338,7 @@ def _render_header(mission: str, included_files: list[str]) -> None:
     console.print(Panel(
         f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
         f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{context_info}",
-        title="[bold cyan]🏛  Fundador IA v4.7.0[/bold cyan]", border_style="cyan", padding=(1, 2),
+        title="[bold cyan]🏛  Fundador IA v5.0.0 GA[/bold cyan]", border_style="cyan", padding=(1, 2),
     ))
     console.print()
 
@@ -554,6 +556,11 @@ def _persist_decision(final_state: DeliberationState, included_files: list[str],
 async def main() -> None:
     args = _parse_args()
 
+    # ── Checagem de ambiente (v5.0.0) ──
+    from backend.core.config import settings as _app_settings
+    for w in _app_settings.environment_warnings():
+        _print_warning(w)
+
     if args.history:
         _show_history(args.history_limit)
         sys.exit(0)
@@ -605,6 +612,11 @@ async def main() -> None:
         )
         sys.exit(code)
 
+    # ── Golden Missions (v5.0.0 GA) ──
+    if args.mission == "golden-missions":
+        from backend.golden.cli import run_golden_mode
+        sys.exit(await run_golden_mode())
+
     # ── Deliberação do Council (default) ──
     if args.last or args.rerun:
         mission, prev_files = _load_for_rerun(use_last=args.last, rerun_id=args.rerun, override_files=args.files)
@@ -630,9 +642,10 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception as e:
+        from backend.cli import friendly_error
         console.print()
         console.print(Panel(
-            f"[bold]Erro inesperado:[/bold] {type(e).__name__}\n\n[dim]{e}[/dim]",
-            title="[bold red]⚠  Erro Crítico[/bold red]", border_style="red", padding=(1, 2),
+            friendly_error(e),
+            title="[bold red]⚠  Erro[/bold red]", border_style="red", padding=(1, 2),
         ))
         sys.exit(1)

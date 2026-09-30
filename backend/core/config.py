@@ -1,5 +1,8 @@
 """
-Configurações centrais do FounderAI (v4.5.0 — VALIDATE_AND_BUILD).
+Configurações centrais do FounderAI (v5.0.0 GA).
+
+Cobre v4.0 (Sandbox) → v4.7 (DISCOVER) → v5.0 (Golden Missions), com
+checagem de ambiente (environment_warnings) e validação de provedores.
 """
 
 from __future__ import annotations
@@ -82,7 +85,7 @@ class Settings(BaseSettings):
     VAB_MIN_CONFIDENCE_TO_AUTOBUILD: float = 0.75
     VAB_ARTIFACTS_DIR: str = "artifacts/validate_and_build"
 
-        # ── v4.6.0 — SELF-AUDIT (Auditoria Interna) ──
+    # ── v4.6.0 — SELF-AUDIT (Auditoria Interna) ──
     SELF_AUDIT_ENABLED: bool = True
     SELF_AUDIT_MAX_MISSIONS_PER_MODE: int = 3
     SELF_AUDIT_ADVERSARIAL_ENABLED: bool = True
@@ -90,12 +93,16 @@ class Settings(BaseSettings):
     SELF_AUDIT_AUDITOR_PROVIDER: str = "ollama"
     SELF_AUDIT_AUDITOR_MODEL: str = "llama3.1:8b"
 
-        # ── v4.7.0 — DISCOVER (Mapeamento de Oportunidades) ──
+    # ── v4.7.0 — DISCOVER (Mapeamento de Oportunidades) ──
     DISCOVER_MODE_ENABLED: bool = True
     DISCOVER_MAX_OPPORTUNITIES: int = 8
     DISCOVER_INTERNAL_CANDIDATES: int = 16
     DISCOVER_ARTIFACTS_DIR: str = "artifacts/discover"
     DISCOVER_HANDOFF_TO_VALIDATE: bool = True
+
+    # ── v5.0.0 GA — Golden Missions ──
+    GOLDEN_ENABLED: bool = True
+    GOLDEN_ARTIFACTS_DIR: str = "artifacts/golden"
 
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
@@ -118,7 +125,7 @@ class Settings(BaseSettings):
 
     # ── App ──
     app_name: str = "Fundador IA"
-    app_version: str = "0.2.0"
+    app_version: str = "5.0.0"
     debug: bool = False
 
     model_config = SettingsConfigDict(
@@ -162,6 +169,7 @@ class Settings(BaseSettings):
         return models[provider]
 
     def timeout_for(self, provider: ProviderName) -> float:
+        """Timeout por provedor: local usa teto maior (codegen lento em CPU)."""
         if provider == "local":
             return max(self.LLM_LOCAL_TIMEOUT_SECONDS, 120.0)
         return self.LLM_TIMEOUT_SECONDS
@@ -204,6 +212,25 @@ class Settings(BaseSettings):
                         f"sem API key correspondente. Usará fallback."
                     )
 
+        return warnings
+
+    def environment_warnings(self) -> list[str]:
+        """Avisos de inicialização quando variáveis essenciais estão ausentes (v5.0)."""
+        warnings: list[str] = []
+        if self.PRIMARY_PROVIDER != "local" and not (self.api_key_for(self.PRIMARY_PROVIDER) or "").strip():
+            warnings.append(
+                f"PRIMARY_PROVIDER='{self.PRIMARY_PROVIDER}' sem API key; "
+                "o fallback será acionado."
+            )
+        if self.FALLBACK_PROVIDER != "local" and not (self.api_key_for(self.FALLBACK_PROVIDER) or "").strip():
+            warnings.append(
+                f"FALLBACK_PROVIDER='{self.FALLBACK_PROVIDER}' sem API key; "
+                "sem rede de segurança em falhas do primário."
+            )
+        if self.PRIMARY_PROVIDER == "local" and self.FALLBACK_PROVIDER == "local":
+            warnings.append(
+                "Ambos os provedores são locais: requer Ollama rodando ('ollama serve')."
+            )
         return warnings
 
 
