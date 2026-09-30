@@ -90,6 +90,13 @@ class Settings(BaseSettings):
     SELF_AUDIT_AUDITOR_PROVIDER: str = "ollama"
     SELF_AUDIT_AUDITOR_MODEL: str = "llama3.1:8b"
 
+        # ── v4.7.0 — DISCOVER (Mapeamento de Oportunidades) ──
+    DISCOVER_MODE_ENABLED: bool = True
+    DISCOVER_MAX_OPPORTUNITIES: int = 8
+    DISCOVER_INTERNAL_CANDIDATES: int = 16
+    DISCOVER_ARTIFACTS_DIR: str = "artifacts/discover"
+    DISCOVER_HANDOFF_TO_VALIDATE: bool = True
+
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_timeout: float = 60.0
