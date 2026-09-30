@@ -1,10 +1,10 @@
 """
-Schemas Pydantic V2 do Modo DISCOVER (v4.7.0).
+Schemas Pydantic V2 do Modo DISCOVER (v4.7.0 + handoff).
 """
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -50,3 +50,7 @@ class DiscoverResult(BaseModel):
     ranking_method: str
     summary: str
     recommended_next: list[str] = Field(default_factory=list)
+    handoff: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Vínculo do handoff: {opportunity_id, validate_mission_id}",
+    )

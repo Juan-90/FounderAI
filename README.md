@@ -167,6 +167,19 @@ python main.py self-audit --no-vab --max-per-mode 2   # reduz escopo
 python main.py self-audit --no-build --no-validate    # só VAB
 
 
+## 🧭 Modo DISCOVER (v4.7.0 — Mapeamento de Oportunidades)
+
+Mapeia oportunidades a partir de um tema em 5 etapas (Scope → Ideation →
+Normalize → Rank → Critic), com ranking por pesos explícitos e filtro
+anti-clichê/duplicatas.
+
+**Executar:**
+```bash
+python main.py discover "Oportunidades de software para barbearias no Brasil"
+python main.py discover "Tema aqui" --max 6                 # limita o ranking
+python main.py discover "Tema aqui" --handoff <opp_id>      # envia ao VALIDATE
+
+
 ## 🧪 Como Executar a Suíte Total de Testes
 
 **Execução padrão (162 testes; testes de LLM real skipam graciosamente):**

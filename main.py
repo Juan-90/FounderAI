@@ -1,13 +1,24 @@
 """
-Fundador IA v4.4.0 — CLI Principal (Council + BUILD + VALIDATE).
+Fundador IA v4.7.0 — CLI Principal.
+
+Modos:
+  • (default)      Deliberação multi-turno do Conselho (Turno 0 + Turno 1)
+  • build          Modo BUILD (Web/Game)            [v4.2/v4.3]
+  • validate       Modo VALIDATE                    [v4.4]
+  • validate-and-build  Ponte Direta                [v4.5]
+  • self-audit     Auditoria Interna                [v4.6]
+  • discover       Mapeamento de Oportunidades      [v4.7]
 
 Uso:
     python main.py                              Menu interativo
     python main.py "Missão"                     Deliberação direta
-    python main.py build "Intent"               Modo BUILD (Web por default)
-    python main.py build "Intent" --type GAME   Modo BUILD (Jogo 2D)
-    python main.py validate "Intent" [-f arq]   Modo VALIDATE (v4.4.0)
-    python main.py --last / --rerun ID / --history
+    python main.py "Missão" -f README.md        Com contexto
+    python main.py build "Intent" [--type GAME] [--project-name NOME]
+    python main.py validate "Intent" [-f arq]
+    python main.py validate-and-build "Intent" [--no-build|--auto-build|--no-confirm]
+    python main.py self-audit [--no-build|--no-validate|--no-vab|--max-per-mode N]
+    python main.py discover "Tema" [--max N] [--handoff OPP_ID]
+    python main.py --last / --rerun ID / --history [-n N]
 """
 
 from __future__ import annotations
@@ -31,10 +42,14 @@ console = Console()
 _CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 
 
+# ─────────────────────────────────────────
+# Parser
+# ─────────────────────────────────────────
+
 class _RichHelpFormatter(argparse.HelpFormatter):
     def format_help(self) -> str:
         return (
-            "\n  🏛  Fundador IA v4.4.0 — Conselho Consultivo Artificial\n"
+            "\n  🏛  Fundador IA v4.7.0 — Conselho Consultivo Artificial\n"
             "  ─────────────────────────────────────────────────────\n\n"
             + super().format_help()
             + "\n  Exemplos:\n"
@@ -42,43 +57,64 @@ class _RichHelpFormatter(argparse.HelpFormatter):
             "    python main.py build \"Quero um sistema de agendamento para minha barbearia\"\n"
             "    python main.py build \"Jogo 2D de nave vs asteroides\" --type GAME\n"
             "    python main.py validate \"Quero validar o EcoTrack-IA...\" -f research.md\n"
+            "    python main.py validate-and-build \"Validar EcoTrack-IA e construir MVP\"\n"
+            "    python main.py self-audit --max-per-mode 2\n"
+            "    python main.py discover \"Oportunidades de software para barbearias no Brasil\" --max 6\n"
             "    python main.py --last\n"
             "    python main.py --history -n 10\n"
-            "    python main.py validate-and-build \"Validar EcoTrack-IA e construir MVP\"\n"
         )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python main.py",
-        description="Avalia, constrói e valida missões de produto via IA.",
+        description="Avalia, descobre, valida, constrói e audita missões de produto via IA.",
         formatter_class=_RichHelpFormatter,
         add_help=True,
     )
     parser.add_argument("mission", nargs="?", default=None,
-                        help="'build', 'validate', ou o texto da missão de deliberação.")
+                        help="'build' | 'validate' | 'validate-and-build' | 'self-audit' | "
+                             "'discover' | ou o texto da missão de deliberação.")
     parser.add_argument("build_intent", nargs="?", default=None,
-                        help="Intent do projeto (usar com build/validate).")
+                        help="Intent/tema do projeto (usar com build/validate/.../discover).")
+
+    # Contexto compartilhado
     parser.add_argument("-f", "--file", action="append", dest="files", default=[],
                         metavar="ARQUIVO", help="Arquivo de contexto (repetível).")
+
+    # BUILD
     parser.add_argument("--project-name", default=None, dest="project_name",
-                        metavar="NOME", help="Nome do projeto no Modo BUILD.")
+                        metavar="NOME", help="BUILD: nome do projeto (default: inferido).")
     parser.add_argument("--type", default=None, dest="project_type",
                         choices=["WEB_APP", "INTERNAL_SYSTEM", "GAME"],
-                        metavar="TIPO", help="Tipo de projeto no Modo BUILD.")
-    parser.add_argument("--no-build", action="store_true", dest="no_build",
-                        help="VALIDATE_AND_BUILD: apenas valida, não constrói.")
+                        metavar="TIPO", help="BUILD: tipo de projeto.")
+
+    # VALIDATE_AND_BUILD
     parser.add_argument("--auto-build", action="store_true", dest="auto_build",
-                        help="VALIDATE_AND_BUILD: libera build sem confirmação humana.")
+                        help="VAB: libera build sem confirmação humana.")
     parser.add_argument("--no-confirm", action="store_true", dest="no_confirm",
-                        help="VALIDATE_AND_BUILD: não pergunta; se exigir humano, aguarda.")
+                        help="VAB: não pergunta; se exigir humano, aguarda (WAITING_HUMAN).")
+
+    # BUILD / SELF-AUDIT (compartilhada)
+    parser.add_argument("--no-build", action="store_true", dest="no_build",
+                        help="VAB: apenas valida. SELF-AUDIT: exclui missões BUILD.")
+
+    # SELF-AUDIT
     parser.add_argument("--no-validate", action="store_true", dest="no_validate",
                         help="SELF-AUDIT: exclui missões VALIDATE.")
     parser.add_argument("--no-vab", action="store_true", dest="no_vab",
                         help="SELF-AUDIT: exclui missões VALIDATE_AND_BUILD.")
     parser.add_argument("--max-per-mode", type=int, default=3, dest="max_per_mode",
                         metavar="N", help="SELF-AUDIT: máx. de missões por modo.")
-    parser.add_argument("--history", action="store_true", help="Histórico de deliberações.")
+
+    # DISCOVER
+    parser.add_argument("--max", type=int, default=8, dest="max_opportunities",
+                        metavar="N", help="DISCOVER: máx. de oportunidades no resultado.")
+    parser.add_argument("--handoff", default=None, dest="handoff_id", metavar="OPP_ID",
+                        help="DISCOVER: envia a oportunidade selecionada ao VALIDATE.")
+
+    # Histórico / reexecução
+    parser.add_argument("--history", action="store_true", help="Exibir histórico de deliberações.")
     parser.add_argument("-n", type=int, default=5, dest="history_limit", metavar="N",
                         help="Entradas no histórico (padrão: 5).")
     parser.add_argument("--last", action="store_true", help="Reexecutar última deliberação.")
@@ -94,21 +130,31 @@ def _parse_args() -> argparse.Namespace:
     return args
 
 
+# ─────────────────────────────────────────
+# Menu interativo
+# ─────────────────────────────────────────
+
 def _interactive_menu() -> argparse.Namespace:
     ns = argparse.Namespace(
         mission=None, build_intent=None, files=[], history=False,
         history_limit=5, last=False, rerun=None,
         project_name=None, project_type=None,
+        no_build=False, auto_build=False, no_confirm=False,
+        no_validate=False, no_vab=False, max_per_mode=3,
+        max_opportunities=8, handoff_id=None,
     )
     console.print()
-    console.print(Panel(
-        "[bold cyan]Fundador IA v4.4.0[/bold cyan] — Conselho Consultivo Artificial\n\n"
-        "  [bold][1][/bold]  Nova Missão\n"
-        "  [bold][2][/bold]  Reexecutar Última Deliberação\n"
-        "  [bold][3][/bold]  Ver Histórico de Decisões\n"
-        "  [bold][4][/bold]  Sair",
-        title="[bold cyan]🏛  Menu Principal[/bold cyan]", border_style="cyan", padding=(1, 3),
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]Fundador IA v4.7.0[/bold cyan] — Conselho Consultivo Artificial\n\n"
+            "  [bold][1][/bold]  Nova Missão (deliberação)\n"
+            "  [bold][2][/bold]  Reexecutar Última Deliberação\n"
+            "  [bold][3][/bold]  Ver Histórico de Decisões\n"
+            "  [bold][4][/bold]  Sair",
+            title="[bold cyan]🏛  Menu Principal[/bold cyan]",
+            border_style="cyan", padding=(1, 3),
+        )
+    )
     choice = console.input("\n[bold]Escolha uma opção:[/bold] ").strip()
 
     if choice == "1":
@@ -132,11 +178,16 @@ def _interactive_menu() -> argparse.Namespace:
     return ns
 
 
+# ─────────────────────────────────────────
+# Utilitários de saída
+# ─────────────────────────────────────────
+
 def _exit_error(message: str, exception: Exception | None = None) -> None:
     detail = str(exception) if exception else ""
     body = message + (f"\n\n[dim]{detail}[/dim]" if detail else "")
     console.print()
-    console.print(Panel(body, title="[bold red]⚠  Erro[/bold red]", border_style="red", padding=(1, 2)))
+    console.print(Panel(body, title="[bold red]⚠  Erro[/bold red]",
+                        border_style="red", padding=(1, 2)))
     sys.exit(1)
 
 
@@ -151,6 +202,10 @@ def _print_success(message: str) -> None:
 def _print_info(message: str) -> None:
     console.print(f"  [dim]{message}[/dim]")
 
+
+# ─────────────────────────────────────────
+# Reexecução
+# ─────────────────────────────────────────
 
 def _load_for_rerun(use_last: bool, rerun_id: str | None, override_files: list[str]) -> tuple[str, list[str]]:
     try:
@@ -186,6 +241,10 @@ def _load_for_rerun(use_last: bool, rerun_id: str | None, override_files: list[s
     return mission, files
 
 
+# ─────────────────────────────────────────
+# Contexto com resumo (Fase 3)
+# ─────────────────────────────────────────
+
 def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
     if not file_paths:
         return "", []
@@ -219,6 +278,10 @@ def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
         console.print()
     return payload.block, payload.included_files
 
+
+# ─────────────────────────────────────────
+# Histórico
+# ─────────────────────────────────────────
 
 def _show_history(limit: int) -> None:
     try:
@@ -260,6 +323,10 @@ def _show_history(limit: int) -> None:
     console.print("\n[dim]Dica: python main.py --rerun ID_COMPLETO para reexecutar.[/dim]\n")
 
 
+# ─────────────────────────────────────────
+# Renderização do Council
+# ─────────────────────────────────────────
+
 def _render_header(mission: str, included_files: list[str]) -> None:
     context_info = (
         f"\n\n[dim]Contexto:[/dim] {', '.join(Path(f).name for f in included_files)}"
@@ -269,7 +336,7 @@ def _render_header(mission: str, included_files: list[str]) -> None:
     console.print(Panel(
         f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
         f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{context_info}",
-        title="[bold cyan]🏛  Fundador IA v4.4.0[/bold cyan]", border_style="cyan", padding=(1, 2),
+        title="[bold cyan]🏛  Fundador IA v4.7.0[/bold cyan]", border_style="cyan", padding=(1, 2),
     ))
     console.print()
 
@@ -367,6 +434,10 @@ def _render_clarification(state: DeliberationState) -> None:
     ))
 
 
+# ─────────────────────────────────────────
+# Coleta de respostas dos jurados (LLM)
+# ─────────────────────────────────────────
+
 async def _collect_juror_responses(mission: str, context_block: str, turn_label: str, extra_context: str = "") -> list[JurorResponse]:
     from backend.agents.council import JURORS, _evaluate_juror
     from backend.core.llm_client import LLMProviderError
@@ -392,6 +463,10 @@ async def _collect_juror_responses(mission: str, context_block: str, turn_label:
         _render_juror_row(response)
     return responses
 
+
+# ─────────────────────────────────────────
+# Fluxo de deliberação multi-turno
+# ─────────────────────────────────────────
 
 async def _run_deliberation(mission: str, context_block: str, included_files: list[str]) -> None:
     from backend.core.council import cancel_deliberation, process_founder_reply, process_turn0
@@ -472,6 +547,10 @@ def _persist_decision(final_state: DeliberationState, included_files: list[str],
     console.print()
 
 
+# ─────────────────────────────────────────
+# Entry point
+# ─────────────────────────────────────────
+
 async def main() -> None:
     args = _parse_args()
 
@@ -489,12 +568,44 @@ async def main() -> None:
         )
         sys.exit(code)
 
-    # ── Modo VALIDATE (v4.4.0) ──
+    # ── Modo VALIDATE (v4.4) ──
     if args.mission == "validate":
         from backend.validate.cli import run_validate_mode
         code = await run_validate_mode(args.build_intent or "", context_files=args.files)
         sys.exit(code)
 
+    # ── Modo VALIDATE_AND_BUILD (v4.5) ──
+    if args.mission == "validate-and-build":
+        from backend.validate_and_build.cli import run_validate_and_build_mode
+        code = await run_validate_and_build_mode(
+            args.build_intent or "",
+            context_files=args.files,
+            no_build=args.no_build,
+            auto_build=args.auto_build,
+            no_confirm=args.no_confirm,
+        )
+        sys.exit(code)
+
+    # ── Modo SELF-AUDIT (v4.6) ──
+    if args.mission == "self-audit":
+        from backend.self_audit.cli import run_self_audit_mode
+        code = await run_self_audit_mode(
+            no_build=args.no_build, no_validate=args.no_validate,
+            no_vab=args.no_vab, max_per_mode=args.max_per_mode,
+        )
+        sys.exit(code)
+
+    # ── Modo DISCOVER (v4.7) ──
+    if args.mission == "discover":
+        from backend.discover.cli import run_discover_mode
+        code = await run_discover_mode(
+            args.build_intent or "",
+            max_opportunities=args.max_opportunities,
+            handoff_id=args.handoff_id,
+        )
+        sys.exit(code)
+
+    # ── Deliberação do Council (default) ──
     if args.last or args.rerun:
         mission, prev_files = _load_for_rerun(use_last=args.last, rerun_id=args.rerun, override_files=args.files)
     else:
@@ -508,15 +619,6 @@ async def main() -> None:
     context_block, included_files = _prepare_context(prev_files)
     _render_header(mission, included_files)
     await _run_deliberation(mission, context_block, included_files)
-
-        # ── Modo SELF-AUDIT (v4.6.0) ──
-    if args.mission == "self-audit":
-        from backend.self_audit.cli import run_self_audit_mode
-        code = await run_self_audit_mode(
-            no_build=args.no_build, no_validate=args.no_validate,
-            no_vab=args.no_vab, max_per_mode=args.max_per_mode,
-        )
-        sys.exit(code)
 
 
 if __name__ == "__main__":

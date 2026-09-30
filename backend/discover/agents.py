@@ -1,31 +1,19 @@
 """
-Agentes + pipeline do Modo DISCOVER (v4.7.0).
+Etapas do Modo DISCOVER (v4.7.0).
 
 ScopeFramer/Ideation usam LLM (injetável). Normalizer/Ranker/Critic são puros
-e determinísticos: ranking por pesos explícitos e crítica por heurísticas de
-clichê/duplicata semântica (contrarian leve).
-
-v4.7.0 hotfix: duplicata semântica usa CONTENÇÃO (menor conjunto de tokens
->=80% contido no maior) em vez de Jaccard, pegando títulos que são extensão
-de outro ("X" vs "X e salões").
+e determinísticos. A ORQUESTRAÇÃO vive em backend/discover/pipeline.py.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import uuid
-from pathlib import Path
 from typing import Any, Optional
 
 from backend.build.agents import LLMBuildClient
-from backend.core.config import Settings, settings
 from backend.core.llm_client import LLMClient
-from backend.discover.schemas import (
-    DiscoverRequest,
-    DiscoverResult,
-    OpportunityProfile,
-)
+from backend.discover.schemas import DiscoverRequest, OpportunityProfile
 
 RANKING_METHOD = "weighted_v1"
 
@@ -56,10 +44,6 @@ def _slug(text: str) -> str:
 def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9 ]+", " ", text.lower()).strip()
 
-
-# ─────────────────────────────────────────────────────────────
-# Agentes LLM
-# ─────────────────────────────────────────────────────────────
 
 class ScopeFramerAgent:
     """Etapa 1 — Normaliza tema/público/geografia/restrições/critérios."""
@@ -113,10 +97,6 @@ class OpportunityIdeationAgent:
         candidates = data.get("candidates") or []
         return [c for c in candidates if isinstance(c, dict)]
 
-
-# ─────────────────────────────────────────────────────────────
-# Componentes puros
-# ─────────────────────────────────────────────────────────────
 
 class OpportunityNormalizer:
     """Etapa 3 — Converte candidatos brutos em OpportunityProfile."""
@@ -193,7 +173,6 @@ class OpportunityCritic:
             ta, tb = set(np_.split()), set(nk.split())
             inter = len(ta & tb)
             # Contenção: o menor conjunto está >=80% contido no maior
-            # (pega títulos que são extensão de outro: "X" vs "X e salões").
             if inter / min(len(ta), len(tb)) >= 0.8:
                 return f"duplicata semântica de '{k.title}'"
         return None
@@ -210,62 +189,3 @@ class OpportunityCritic:
             else:
                 kept.append(p)
         return kept, rejected
-
-
-# ─────────────────────────────────────────────────────────────
-# Pipeline
-# ─────────────────────────────────────────────────────────────
-
-class DiscoverPipeline:
-    """Encadeia as 5 etapas e produz o DiscoverResult."""
-
-    def __init__(
-        self,
-        client: LLMBuildClient | None = None,
-        config: Settings | None = None,
-        artifact_manager: Any | None = None,
-    ) -> None:
-        self._config = config if config is not None else settings
-        self._framer = ScopeFramerAgent(client)
-        self._ideation = OpportunityIdeationAgent(client)
-        self._normalizer = OpportunityNormalizer()
-        self._ranker = OpportunityRanker()
-        self._critic = OpportunityCritic()
-        self._artifacts = artifact_manager
-        self.last_discover_id: Optional[str] = None
-
-    async def run(self, request: DiscoverRequest) -> DiscoverResult:
-        scope = await self._framer.frame(request)
-        raw = await self._ideation.generate(scope, request.seeds)
-        raw = raw[: self._config.DISCOVER_INTERNAL_CANDIDATES]
-
-        profiles = self._normalizer.normalize(raw)
-        ranked = self._ranker.rank(profiles)
-
-        if request.include_contrarian:
-            kept, rejected = self._critic.critique(ranked)
-        else:
-            kept, rejected = ranked, []
-
-        top = kept[: request.max_opportunities]
-        summary = (
-            f"{len(top)} oportunidade(s) selecionada(s) de {len(raw)} candidatas; "
-            f"{len(rejected)} rejeitada(s) pelo critic. "
-            f"Top: {top[0].title if top else 'n/a'}."
-        )
-        recommended_next = (
-            ["Validar a oportunidade top no modo VALIDATE."]
-            if request.handoff_to_validate and top else []
-        )
-        result = DiscoverResult(
-            opportunities=top, rejected=rejected, ranking_method=RANKING_METHOD,
-            summary=summary, recommended_next=recommended_next,
-        )
-
-        if self._artifacts is not None:
-            self.last_discover_id = uuid.uuid4().hex
-            self._artifacts.save_artifact(
-                self.last_discover_id, "discover_result.json",
-                result.model_dump_json(indent=2),
-            )
-        return result

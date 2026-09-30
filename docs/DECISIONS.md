@@ -977,3 +977,47 @@ regressões, overclaims e incoerências sem depender de julgamento humano.
 ## Fora de escopo (v4.6.0)
 - Auto-correção a partir do scorecard (apenas reporta).
 - Auditoria de segurança/código-fonte (foco em comportamento de pipelines).
+
+
+# ADR-015 — Discover Mode (v4.7.0)
+
+* **Data:** 27/09/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+Antes da v4.7, o FounderAI só validava/construía ideias trazidas pelo fundador.
+Faltava um modo que **mapeasse oportunidades** a partir de um tema, com ranking
+transparente e filtro anti-clichê, alimentando o VALIDATE com as melhores candidatas.
+
+## Decisão
+1. **Pipeline de 5 etapas** em `backend/discover/agents.py`: ScopeFramer e
+   Ideation (LLM injetável) + Normalizer, Ranker e Critic (puros/determinísticos).
+2. **Ranking por pesos explícitos** (`weighted_v1`): dor percebida 0.35,
+   viabilidade de MVP 0.25, potencial de pagamento 0.25, diferenciação 0.15 —
+   todos expostos em `score_breakdown` (auditável, sem caixa-preta).
+3. **Critic contrarian leve**: rejeita clichês ("rede social", "uber para"...)
+   e duplicatas semânticas por **contenção de tokens ≥ 0.8** (pega títulos que
+   são extensão de outro), sempre com motivo explícito em `rejected`.
+4. **`DiscoverPipeline`** (pipeline.py) orquestra etapas + `DiscoverSynthesizer`
+   (top N + rejeitadas + `discover_report.md`) + persistência em
+   `artifacts/discover/<mission_id>/` (scope/opportunities/rejected/report/
+   mission_state).
+5. **Handoff VALIDATE**: com `handoff_to_validate` + `selected_opportunity_id`,
+   converte o `OpportunityProfile` em `ValidateRequest`, executa o
+   `ValidatePipeline` e registra o vínculo em `handoff.validate_mission_id`
+   (resultado + mission_state), fechando o ciclo DISCOVER→VALIDATE→BUILD.
+
+## Consequências
+- Positivas: funil de ideias reprodutível e auditável; ranking explicável;
+  clichês/duplicatas filtrados antes de gastar ciclos de validação.
+- Negativas: heurísticas de score são proxy (não substituem evidência de
+  mercado); o Critic pode rejeitar falsos positivos semânticos.
+
+## Alternativas rejeitadas
+- Ranking por LLM único (não-auditável, instável entre execuções).
+- Jaccard para duplicatas (0.67 em "X" vs "X e salões" deixava duplicata passar).
+
+## Fora de escopo (v4.7.0)
+- Busca de evidências externas (web scraping) para `evidence_level`.
+- Re-ranking automático após resultados do VALIDATE.

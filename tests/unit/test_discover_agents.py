@@ -1,5 +1,5 @@
 """
-Testes unitários dos agentes/pipeline DISCOVER (v4.7.0). Sem LLM real.
+Testes unitários das etapas + pipeline DISCOVER (v4.7.0). Sem LLM real.
 """
 
 from __future__ import annotations
@@ -9,13 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from backend.discover.agents import (
-    DiscoverPipeline,
+    RANK_WEIGHTS,
     OpportunityCritic,
     OpportunityNormalizer,
     OpportunityRanker,
-    RANK_WEIGHTS,
 )
-from backend.discover.schemas import DiscoverRequest, OpportunityProfile
+from backend.discover.pipeline import DiscoverPipeline
+from backend.discover.schemas import DiscoverRequest
 from backend.domain.artifacts import ArtifactManager
 
 
@@ -98,7 +98,7 @@ def test_critic_rejeita_cliche_e_duplicata() -> None:
 # Pipeline (fakes)
 # ─────────────────────────────────────────────────────────────
 
-def _pipeline(tmp_path: Path, include_contrarian: bool = True) -> DiscoverPipeline:
+def _pipeline(tmp_path: Path) -> DiscoverPipeline:
     client = FakeDiscoverClient(
         frame={"theme": "serviços locais", "audience": "PMEs",
                "geography": "Brasil", "constraints": [], "attractiveness_criteria": []},
@@ -120,9 +120,11 @@ def test_pipeline_respeita_max_e_persiste(tmp_path: Path) -> None:
     assert result.summary
     assert len(result.rejected) >= 2  # clichê + duplicata
 
-    # Narrowing: last_discover_id é Optional[str]; garante str antes do Path "/"
-    assert pipe.last_discover_id is not None
-    assert (tmp_path / pipe.last_discover_id / "discover_result.json").exists()
+    assert pipe.last_mission_id is not None
+    mid = pipe.last_mission_id
+    for fname in ("scope.json", "opportunities.json", "rejected.json",
+                  "discover_report.md", "mission_state.json"):
+        assert (tmp_path / mid / fname).exists(), f"artefato ausente: {fname}"
 
 
 def test_pipeline_sem_contrarian_nao_rejeita(tmp_path: Path) -> None:
@@ -134,9 +136,10 @@ def test_pipeline_sem_contrarian_nao_rejeita(tmp_path: Path) -> None:
     assert len(result.opportunities) > 0
 
 
-def test_pipeline_handoff_to_validate(tmp_path: Path) -> None:
+def test_pipeline_handoff_sem_validate_nao_quebra(tmp_path: Path) -> None:
     pipe = _pipeline(tmp_path)
     result = asyncio.run(pipe.run(DiscoverRequest(
         theme="serviços locais", handoff_to_validate=True,
     )))
-    assert result.recommended_next
+    assert result.recommended_next  # sugere validação
+    assert result.handoff is None   # sem validate_pipeline injetado

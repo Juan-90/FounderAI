@@ -1,18 +1,15 @@
 """
 Módulo DISCOVER (v4.7.0 — Mapeamento Estruturado de Oportunidades).
-
-Pipeline encadeado: ScopeFramer → Ideation → Normalizer → Ranker → Critic,
-produzindo um DiscoverResult ranqueado e criticado (contrarian leve).
 """
 
 from backend.discover.agents import (
-    DiscoverPipeline,
     OpportunityCritic,
     OpportunityIdeationAgent,
     OpportunityNormalizer,
     OpportunityRanker,
     ScopeFramerAgent,
 )
+from backend.discover.pipeline import DiscoverPipeline, DiscoverSynthesizer
 from backend.discover.schemas import (
     DiscoverRequest,
     DiscoverResult,
@@ -23,6 +20,7 @@ __all__ = [
     "DiscoverPipeline",
     "DiscoverRequest",
     "DiscoverResult",
+    "DiscoverSynthesizer",
     "OpportunityCritic",
     "OpportunityIdeationAgent",
     "OpportunityNormalizer",
