@@ -12,6 +12,7 @@ class ProjectMode(str, Enum):
     BUILD              = "BUILD"
     VALIDATE           = "VALIDATE"
     VALIDATE_AND_BUILD = "VALIDATE_AND_BUILD"
+    SELF_AUDIT         = "SELF_AUDIT"
     DISCOVER           = "DISCOVER"
     IMPROVE            = "IMPROVE"
 

@@ -82,6 +82,14 @@ class Settings(BaseSettings):
     VAB_MIN_CONFIDENCE_TO_AUTOBUILD: float = 0.75
     VAB_ARTIFACTS_DIR: str = "artifacts/validate_and_build"
 
+        # ── v4.6.0 — SELF-AUDIT (Auditoria Interna) ──
+    SELF_AUDIT_ENABLED: bool = True
+    SELF_AUDIT_MAX_MISSIONS_PER_MODE: int = 3
+    SELF_AUDIT_ADVERSARIAL_ENABLED: bool = True
+    SELF_AUDIT_ARTIFACTS_DIR: str = "artifacts/self_audit"
+    SELF_AUDIT_AUDITOR_PROVIDER: str = "ollama"
+    SELF_AUDIT_AUDITOR_MODEL: str = "llama3.1:8b"
+
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_timeout: float = 60.0
