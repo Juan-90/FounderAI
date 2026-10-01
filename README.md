@@ -1,46 +1,42 @@
+Markdown
 # 🏛 FounderAI — AI Project Operating System
 
 **FounderAI** é um *Sistema Operacional de Projetos* movido a IA: ele **descobre**
-oportunidades, **valida** ideias, **constrói** MVPs executáveis e **audita a si
-próprio** — transformando uma intenção de fundador em software testado, com trilha
-de auditoria completa e decisão humana no comando.
+oportunidades, **valida** ideias, **construções** MVPs executáveis, **expe por API reativa** e **audita a si próprio** — transformando uma intenção de fundador em software testado, com trilha de auditoria completa e decisão humana no comando.
 
-> v5.0.0 GA — estável, testado e congelado (ver `ADR-017-GA-Release-Freeze`).
+> **v5.1.0** — Interaction Layer & Reactive API (REST + WebSocket) | Núcleo GA Selado em v5.0.0.
 
 ---
 
-## 🧠 O Ciclo Cognitivo
+## 🧠 O Ciclo Cognitivo & Arquitetura
 
-```
-   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐
-   │ DISCOVER │──▶│ VALIDATE │──▶│  BUILD   │──▶│ SELF-AUDIT │──┐
-   │ (mapear) │   │ (merece?)│   │(construir)│   │ (auditar)  │  │
-   └──────────   └──────────┘   └──────────┘   └────────────┘  │
-        ▲                                                       │
-        └────────────────────  feedback  ───────────────────────┘
-```
+┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐
+│ DISCOVER │──▶│ VALIDATE │──▶│  BUILD   │──▶│ SELF-AUDIT │──┐
+│ (mapear) │   │ (merece?)│   │(construir)│   │ (auditar)  │  │
+└──────────┘   └──────────┘   └──────────┘   └────────────┘  │
+▲                                                       │
+└──────────────────── feedback ─────────────────────────┘
+│
+┌───────────────────────────┐
+│ Interaction Layer (v5.1)  │
+│ FastAPI REST + WebSockets │
+└───────────────────────────┘
 
-- **🧭 DISCOVER** — mapeia oportunidades a partir de um tema (ranking por pesos
-  explícitos + filtro anti-clichê) e entrega as melhores ao VALIDATE.
-- **🔍 VALIDATE** — analisa dor/mercado/concorrência/viabilidade e emite veredito
-  `INVESTIGATE / BUILD / PIVOT / DISCARD` com confiança.
-- **🏗 BUILD** — gera requisitos → arquitetura → código → testes e os executa em
-  sandbox Docker hardenizada (Web/FastAPI ou Game/Pygame headless).
-- **🩺 SELF-AUDIT** — roda missões canônicas nos 3 modos, aplica objective checks
-  e um auditor adversarial (Creator ≠ Auditor), consolidando um scorecard
-  `HEALTHY / DEGRADED / CRITICAL`.
-- **🧩 VALIDATE_AND_BUILD** — ponte direta: valida e, se o gate autorizar
-  (com confirmação humana quando exigida), constrói na mesma missão.
-- **🏛 Council** *(origem)* — deliberação multi-turno de jurados de IA para
-  avaliar missões de produto (APPROVED/REJECTED + esclarecimentos).
+
+- **🧭 DISCOVER** — mapeia oportunidades a partir de um tema (ranking por pesos explícitos + filtro anti-clichê) e entrega as melhores ao VALIDATE.
+- **🔍 VALIDATE** — analisa dor/mercado/concorrência/viabilidade e emite veredito `INVESTIGATE / BUILD / PIVOT / DISCARD` com confiança.
+- **🏗 BUILD** — gera requisitos → arquitetura → código → testes e os executa em sandbox Docker hardenizada (Web/FastAPI ou Game/Pygame headless).
+- **🩺 SELF-AUDIT** — roda missões canônicas nos 3 modos, aplica objective checks e um auditor adversarial (Creator ≠ Auditor), consolidando um scorecard `HEALTHY / DEGRADED / CRITICAL`.
+- **🧩 VALIDATE_AND_BUILD** — ponte direta: valida e, se o gate autorizar (com confirmação humana quando exigida), constrói na mesma missão.
+- **⚡ INTERACTION LAYER (v5.1)** — `MissionEngine` orquestrador que expõe todas as capacidades do núcleo via API REST e streaming WebSocket em tempo real.
 
 ---
 
-## ⚡ Instalação rápida
+## ⚡ Instalação Rápida
 
 ```bash
 git clone <repo> && cd FounderAI
-python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate       # Windows: .venv\Scripts\activate
 pip install -e .[dev]                                   # ou pip install -r requirements.txt
 
 # Sandbox (necessária p/ BUILD/SELF-AUDIT):
@@ -49,107 +45,63 @@ docker build -t founderai-sandbox-python:v1 \
 
 # Configuração:
 cp .env.example .env     # edite chaves de API e provedores
-```
+🌐 Servidor de API (v5.1.0) & Frontend
+A partir da v5.1.0, o FounderAI roda como um serviço reativo desacoplado:
 
-**Provedores:** `PRIMARY_PROVIDER` (`groq|openrouter|openai|local`) com fallback
-automático para `local` (Ollama). Sem chave Cloud? Use `PRIMARY_PROVIDER=local`
-com `ollama serve`. O startup avisa (sem stack traces) se faltar algo essencial.
+Subir a API Backend:
 
----
+Bash
+uvicorn backend.api.app:app --reload --port 8000
+REST: http://localhost:8000/api/v1/interact
 
-## 🖥 Uso via CLI
+Docs Swagger: http://localhost:8000/docs
 
-```bash
-# Council (deliberação)
-python main.py "Criar app de finanças para MEIs" -f README.md
+WebSocket: ws://localhost:8000/ws/v1/missions/{mission_id}/stream
 
+Subir o Frontend Harmonizado:
+
+Bash
+streamlit run frontend/app.py
+🖥 Uso via CLI
+Também é possível invocar o motor diretamente via linha de comando:
+
+Bash
 # DISCOVER
 python main.py discover "Oportunidades de software para barbearias no Brasil" --max 6
-python main.py discover "Tema" --handoff <opp_id>          # envia ao VALIDATE
 
 # VALIDATE
 python main.py validate "Quero validar o EcoTrack-IA..." -f research.md
 
 # BUILD
 python main.py build "Quero um sistema de agendamento para minha barbearia"
-python main.py build "Jogo 2D de nave vs asteroides" --type GAME
 
-# VALIDATE_AND_BUILD
-python main.py validate-and-build "Validar EcoTrack-IA e construir MVP" --auto-build
-
-# SELF-AUDIT
+# SELF-AUDIT & Golden Missions
 python main.py self-audit --max-per-mode 2
-
-# Golden Missions (regressão GA)
 python main.py golden-missions
+🗂 Artefatos & Histórico de Decisões
+Artefatos Gerados: Persistidos por missão em artifacts/<modo>/<mission_id>/.
 
-# Histórico / reexecução
-python main.py --history -n 10
-python main.py --last
-```
+Histórico Arquitetural (ADRs): Todas as decisões de arquitetura e design da v1.0 à v5.1.0 (incluindo a ADR-018) estão centralizadas e versionadas no arquivo único docs/DECISIONS.md.
 
-**Exit codes previsíveis:** `0` sucesso · `1` falha (todos os modos).
-
----
-
-
-## 🌐 API REST + WebSocket (v5.1.0)
-
-A Interaction Layer expõe o núcleo v5.0 via HTTP/WebSocket para UI web, mobile,
-voice e integrações.
-
-**Subir o servidor:**
-```bash
-pip install fastapi uvicorn
-uvicorn backend.api.app:app --reload --port 8000
-
-
-## 🗂 Artefatos
-
-Cada modo persiste tudo sob `artifacts/<modo>/<mission_id>/`:
-
-```
-artifacts/
-├── discover/            scope.json, opportunities.json, rejected.json, discover_report.md
-├── validate/            idea_profile.json, validation_report.md, ...
-├── build/               requirements.md, architecture.md, código, report.md
-├── validate_and_build/  gate_decision.json, composite_report.md, ...
-├── self_audit/          scorecard.json, adversarial_review.json, self_audit_report.md
-└── golden/              golden_report.md, golden_state.json, mission_state.json (por missão)
-```
-
----
-
-## 🧪 Testes
-
-```bash
-pytest -q                     # suíte padrão (sem LLM/Docker)
+🧪 Testes
+Bash
+pytest -q                     # suíte completa (327+ testes cobrindo rotas, WS, motor e pipelines)
 pytest -q --run-real-llm      # inclui testes com LLM real
 pytest -q --run-golden        # inclui a bateria Golden Missions real
-```
+⚠️ Limitações Honestas (v5.1.0)
+Sem Pesquisa Web em Tempo Real: O DISCOVER e o VALIDATE utilizam dados internos/heurística de LLM (a busca web com Grafo de Evidências é o foco da v5.2.0).
 
----
+Renderização de Jogos: A validação de jogos 2D é executada headless (camada de lógica e testes); render real de tela permanece no ambiente local.
 
-## ⚠️ Limitações Honestas (v5.0)
+Persistência de Artefatos: Artefatos e logs são gravados em disco e SQLite local (artifacts/).
 
-- **Qualidade atrelada ao LLM:** prompts/heurísticas mitigam, mas não eliminam,
-  variabilidade de modelos (especialmente locais/pequenos).
-- **Sandbox sem pygame/display:** jogos são validados pela camada de lógica
-  (testes headless); render/áudio reais ficam para a v5.1+.
-- **Sem evidências externas:** `evidence_level` do DISCOVER é proxy heurístico
-  (não faz web scraping).
-- **Self-audit real custa LLM/Docker:** por padrão roda sob demanda (`--run-golden`
-  / `self-audit`), não em todo commit.
-- **Persistência local:** artefatos em disco; banco/Qdrant permanecem legados
-  (histórico do Council), sem dashboard web.
+🗺 Roadmap Atualizado
+v5.1.0 (Atual) — Interaction Layer (MissionEngine, REST API FastAPI, WebSockets & Streamlit harmonizado).
 
-## 🗺 Roadmap (v5.1+)
+v5.2.0 (Próxima) — External Evidence & Evidence Graph (Busca web real, citação de fontes e confiança de dados).
 
-- **v5.1** — Sandbox com pygame/display virtual; re-ranking automático pós-VALIDATE.
-- **v5.2** — Busca de evidências externas (web) para o DISCOVER/VALIDATE.
-- **v5.3** — Dashboard web do scorecard GA + memória de longo prazo (RAG).
-- **v6.0** — Auto-correção a partir do SELF-AUDIT (loop fechado de melhoria).
+v5.3.0 — Continuous Project Memory & Versioning Loop (RAG e histórico contínuo do projeto).
 
----
+v6.0.0 / v7.0.0 — Integração com o ecossistema e orquestração do Colibri.
 
-*Fundador IA · do Conselho ao GA · v5.0.0*
+FounderAI · AI Project Operating System · v5.1.0
