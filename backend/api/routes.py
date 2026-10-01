@@ -132,3 +132,5 @@ async def get_artifact(
         "file_name": fname,
         "content": target.read_text(encoding="utf-8"),
     }
+
+    # Router WebSocket é registrado em app.py via ws_router.

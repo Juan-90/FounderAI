@@ -92,6 +92,18 @@ python main.py --last
 
 ---
 
+
+## 🌐 API REST + WebSocket (v5.1.0)
+
+A Interaction Layer expõe o núcleo v5.0 via HTTP/WebSocket para UI web, mobile,
+voice e integrações.
+
+**Subir o servidor:**
+```bash
+pip install fastapi uvicorn
+uvicorn backend.api.app:app --reload --port 8000
+
+
 ## 🗂 Artefatos
 
 Cada modo persiste tudo sob `artifacts/<modo>/<mission_id>/`:

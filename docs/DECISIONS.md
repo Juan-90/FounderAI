@@ -1127,3 +1127,54 @@ regras claras para mudanças futuras.
 ## Fora do freeze
 - Experimentos da v5.1+ (pygame/display, evidências web, dashboard, RAG), que
   viverão em branches/ADRs próprios.
+
+
+
+  # ADR-018 — Interaction Layer: REST + WebSocket (v5.1.0)
+
+* **Data:** 02/10/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+A v5.0 entregou o *AI Project Operating System* com 6 modos operacionais, mas a
+interação era exclusivamente CLI. Para viabilizar UI (web/mobile/voice) e
+integrações, faltava uma **camada de interação** reativa e independente das
+engines/agentes já testados.
+
+## Decisão
+1. **FastAPI como camada de interação** (não como substituto das engines). O
+   núcleo v5.0 (pipelines + GoldenRunner + MissionEngine dispatcher) permanece
+   intacto; a API apenas orquestra.
+2. **`InteractionRequest` unificado**: fonte (`cli|web|mobile|voice`) + modo +
+   prompt + opções. Qualquer origem fala o mesmo contrato.
+3. **`MissionEngine`** como dispatcher de alto nível: recebe `InteractionRequest`,
+   delega ao pipeline correspondente e emite eventos via callback/`astream()`.
+4. **REST** para interações síncronas e consultas (`/health`, `/api/v1/interact`,
+   `/api/v1/missions/{id}`, `/api/v1/artifacts/{id}/{file}`).
+5. **WebSocket** (`/ws/v1/missions/{id}/stream?mode=...&prompt=...`) para streaming
+   bi-direcional em tempo real: eventos JSON com `type` ∈ {status_update, log,
+   artifact_generated, completed, error}.
+6. **`ConnectionManager`** por mission_id: múltiplos clientes podem observar a
+   mesma missão; broadcast tolera quedas sem quebrar outros sockets.
+7. **Segurança de artefatos**: `_safe_segment` rejeita qualquer ocorrência de `..`
+   com 400 (path traversal).
+8. **UI Streamlit** consumindo REST para submissão + artefatos, e expondo o
+   endpoint WS como recurso avançado.
+
+## Consequências
+- Positivas: desacoplamento total UI/núcleo; streaming real de progresso;
+  múltiplas origens (web/mobile/voice) sobre a mesma superfície; testes
+  determinísticos via `TestClient` sem LLM/Docker.
+- Negativas: 1 camada extra de rede (latência desprezível para pipelines de
+  minutos); cliente WS precisa gerenciar reconexão (responsabilidade do client).
+
+## Alternativas rejeitadas
+- Flask/Django (mais boilerplate para async/streaming).
+- SSE apenas (unidirecional, sem feedback do client).
+- gRPC (overkill para UI web e overhead de tooling).
+
+## Fora de escopo (v5.1.0)
+- Autenticação/autorização (API pública interna).
+- Persistência de sessões WS após desconexão.
+- Rate limiting (será tratado em v5.2 com API gateway).

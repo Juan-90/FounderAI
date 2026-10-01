@@ -1,5 +1,5 @@
 """
-Aplicação FastAPI do FounderAI (v5.1.0).
+Aplicação FastAPI do FounderAI (v5.1.0 — REST + WebSocket).
 
 create_app() permite injetar config/engine (testável via TestClient).
 """
@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from backend.api.routes import router
+from backend.api.websocket import ws_router
 from backend.core.config import Settings, settings
 from backend.core.engine import API_VERSION, MissionEngine
 
@@ -28,6 +29,7 @@ def create_app(
     app.state.config = config
     app.state.engine = engine
     app.include_router(router)
+    app.include_router(ws_router)
     return app
 
 
