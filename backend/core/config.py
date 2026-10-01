@@ -104,6 +104,16 @@ class Settings(BaseSettings):
     GOLDEN_ENABLED: bool = True
     GOLDEN_ARTIFACTS_DIR: str = "artifacts/golden"
 
+        # ── v5.2.0 — Evidence Layer ──
+    EVIDENCE_ENABLED: bool = True
+    EVIDENCE_PROVIDER: str = "mock"                 # "mock" | "http"
+    EVIDENCE_HTTP_ENDPOINT: str = ""
+    EVIDENCE_HTTP_API_KEY: str = ""
+    EVIDENCE_MAX_QUERIES_PER_MISSION: int = 3
+    EVIDENCE_MAX_RESULTS_PER_QUERY: int = 5
+    EVIDENCE_TIMEOUT_SECONDS: float = 10.0
+    EVIDENCE_FAIL_OPEN: bool = True
+
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_timeout: float = 60.0
