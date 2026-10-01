@@ -1,26 +1,36 @@
 """
-ValidatePipeline — orquestrador do Modo VALIDATE (v4.4.0 + erros detalhados).
+ValidatePipeline — orquestrador do Modo VALIDATE (v5.2.0 + Evidence).
 
-v4.4.0 hotfix:
-  • Cada agente roda em _run_stage com try/except que imprime no console Rich
-    "⚠️  Erro no estágio <Agente>: <detalhes>" e propaga para o handler de run.
-  • O handler de run grava a mensagem exata em mode_payload["error"],
-    mode_payload["final_report"] e validation_report.md.
+7 etapas com os agentes reais: IdeaIntake → ProblemMarket → Competitor →
+TechnicalFeasibility → ContrarianRisk → ExperimentDesign → ValidationSynthesizer.
+
+v5.2.0: Injeta EvidenceService (opcional) nas análises de Mercado/Concorrência;
+calcula evidence_gaps reais; anexa seção "Evidence vs Opinion" ao relatório;
+persiste EvidenceGraph em artifacts/validate/<mission_id>/evidence/.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Coroutine, Optional
+from typing import Any, Callable, Optional
 
 from rich.console import Console
 
 from backend.core.config import Settings, settings
+from backend.core.evidence.service import EvidenceService
 from backend.domain.artifacts import ArtifactManager
 from backend.domain.enums import MissionStatus, ProjectMode
+from backend.domain.evidence import (
+    Claim,
+    EvidenceGraph,
+    EvidenceItem,
+    EvidenceOrigin,
+    Source,
+)
+from backend.domain.evidence_store import save_evidence_graph
 from backend.domain.models import MissionState
 from backend.validate.agents import (
     CompetitorAgent,
@@ -31,37 +41,28 @@ from backend.validate.agents import (
     TechnicalFeasibilityAgent,
     ValidationSynthesizer,
 )
-from backend.validate.schemas import ValidatePayload, ValidateRequest
+from backend.validate.schemas import ValidateRequest
 
 console = Console(stderr=True)
 
 StageCallback = Callable[[int, str], None]
 
+_STOPWORDS = frozenset({"de", "da", "do", "das", "dos", "para", "com", "em",
+                        "no", "na", "um", "uma", "que", "e", "ou", "por"})
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
-
-def _md(title: str, data: dict[str, Any]) -> str:
-    lines: list[str] = [f"# {title}", ""]
-    for key, value in data.items():
-        lines.append(f"## {key}")
-        if isinstance(value, (list, dict)):
-            lines.append("```json\n" + json.dumps(value, indent=2, ensure_ascii=False) + "\n```")
-        else:
-            lines.append(str(value))
-        lines.append("")
-    return "\n".join(lines)
+def _kw(text: str) -> set[str]:
+    tokens = re.findall(r"[A-Za-zÀ-ÿ0-9]{3,}", text.lower())
+    return {t for t in tokens if t not in _STOPWORDS}
 
 
 class ValidatePipeline:
-    """Orquestra os 7 estágios do Modo VALIDATE com erros detalhados."""
-
     def __init__(
         self,
         client: Any | None = None,
         artifact_manager: ArtifactManager | None = None,
         config: Settings | None = None,
+        evidence_service: Optional[EvidenceService] = None,
     ) -> None:
         self._config: Settings = config if config is not None else settings
         self._artifacts: ArtifactManager = (
@@ -76,6 +77,8 @@ class ValidatePipeline:
         self._contrarian = ContrarianRiskAgent(client)
         self._experiments = ExperimentDesignAgent(client)
         self._synth = ValidationSynthesizer(client)
+        self._evidence = evidence_service
+        self.last_mission_id: Optional[str] = None
 
     @property
     def artifacts(self) -> ArtifactManager:
@@ -88,21 +91,15 @@ class ValidatePipeline:
 
     def _advance(self, state: MissionState, stage: str) -> None:
         state.current_stage = stage
-        state.updated_at = _utcnow()
 
     def _save(self, state: MissionState, name: str, content: str) -> None:
         artifact = self._artifacts.save_artifact(state.mission_id, name, content)
         state.artifacts.append(artifact)
 
     async def _run_stage(
-        self,
-        on_stage: Optional[StageCallback],
-        index: int,
-        label: str,
-        agent_name: str,
-        coro: Coroutine[Any, Any, Any],
+        self, on_stage: Optional[StageCallback], index: int, label: str,
+        agent_name: str, coro: Any,
     ) -> Any:
-        """Executa um agente com try/except detalhado (log + propagação)."""
         self._emit(on_stage, index, label)
         try:
             return await coro
@@ -115,28 +112,86 @@ class ValidatePipeline:
         failure = (
             "# Validation Report (FALHA)\n\n"
             f"Estágio da falha: {state.current_stage}\n\n"
-            "## Erro\n```\n" + error_msg + "\n```\n\n"
-            "## Limitações\n- Validação interrompida; artefatos parciais podem existir.\n"
+            "## Erro\n```\n" + error_msg + "\n```\n"
         )
         try:
             self._save(state, "validation_report.md", failure)
         except Exception:
             pass
 
+    # ── Helpers de evidência (v5.2.0) ──
+    def _extract_claims(
+        self, idea_profile: dict, problem_market: dict, evidence_items: list[EvidenceItem]
+    ) -> list[Claim]:
+        claims: list[Claim] = []
+        problem = problem_market.get("pain_description", "")
+        if problem:
+            p_kw = _kw(problem)
+            matched = [ev.evidence_id for ev in evidence_items if p_kw & _kw(ev.quote_or_summary)]
+            claims.append(Claim(claim_id="cl-problem", text=problem,
+                                origin=EvidenceOrigin.MODEL_OPINION, evidence_ids=matched))
+        audience = problem_market.get("audience_segment", "") or idea_profile.get(
+            "clarified_fields", {}).get("target_audience", "")
+        if audience:
+            a_kw = _kw(audience)
+            matched = [ev.evidence_id for ev in evidence_items if a_kw & _kw(ev.quote_or_summary)]
+            claims.append(Claim(claim_id="cl-audience", text=f"Público-alvo: {audience}",
+                                origin=EvidenceOrigin.MODEL_OPINION, evidence_ids=matched))
+        return claims
+
+    def _identify_evidence_gaps(
+        self, problem_market: dict, evidence_items: list[EvidenceItem]
+    ) -> list[str]:
+        if not evidence_items:
+            return ["Nenhuma evidência externa coletada — alegações são opinião do modelo."]
+        gaps: list[str] = []
+        problem = problem_market.get("pain_description", "")
+        if problem and not any(_kw(problem) & _kw(ev.quote_or_summary) for ev in evidence_items):
+            gaps.append(f"Sem evidência externa para o problema: '{problem[:80]}'")
+        return gaps
+
+    def _evidence_section(
+        self, claims: list[Claim], evidence_items: list[EvidenceItem],
+        sources: list[Source], gaps: list[str],
+    ) -> str:
+        src_by_id = {s.source_id: s for s in sources}
+        ev_by_id = {e.evidence_id: e for e in evidence_items}
+        lines = ["", "## Evidence vs Opinion", "", "### Claims com evidência externa"]
+        cited = False
+        for c in claims:
+            for eid in c.evidence_ids:
+                ev = ev_by_id.get(eid)
+                if ev is None:
+                    continue
+                src = src_by_id.get(ev.source_id)
+                url = src.url if src else None
+                publisher = (src.publisher if src else None) or "fonte desconhecida"
+                lines.append(f"- {c.text} — \"{ev.quote_or_summary[:80]}\" "
+                             f"[Source: {publisher}/{url or 'sem-url'}]")
+                cited = True
+        if not cited:
+            lines.append("- (nenhum claim corroborado por evidência externa)")
+        lines += ["", "### Evidence gaps (opinião não corroborada)"]
+        if gaps:
+            lines += [f"- {g}" for g in gaps]
+        else:
+            lines.append("- (nenhum)")
+        return "\n".join(lines) + "\n"
+
     async def run(
-        self,
-        request: ValidateRequest,
-        on_stage: Optional[StageCallback] = None,
+        self, request: ValidateRequest, on_stage: Optional[StageCallback] = None,
         mission_id: Optional[str] = None,
     ) -> MissionState:
         state = MissionState(
-            mission_id=mission_id or uuid.uuid4().hex,
-            project_id=uuid.uuid4().hex,
-            mode=ProjectMode.VALIDATE,
-            status=MissionStatus.IN_PROGRESS,
-            current_stage="init",
-            mode_payload=ValidatePayload.build(),
+            mission_id=mission_id or uuid.uuid4().hex, project_id=uuid.uuid4().hex,
+            mode=ProjectMode.VALIDATE, status=MissionStatus.IN_PROGRESS,
+            current_stage="init", mode_payload={"idea_text": request.idea_text},
         )
+        self.last_mission_id = state.mission_id
+        evidence_items: list[EvidenceItem] = []
+        sources: list[Source] = []
+        claims: list[Claim] = []
+        real_gaps: list[str] = []
 
         try:
             # 1 — Idea Intake
@@ -154,7 +209,8 @@ class ValidatePipeline:
                 on_stage, 2, "Assessing Problem & Market...", "ProblemMarketAgent",
                 self._problem.analyze(idea_profile),
             )
-            self._save(state, "market_problem.md", _md("Problem & Market", problem_market))
+            self._save(state, "market_problem.md",
+                       json.dumps(problem_market, indent=2, ensure_ascii=False))
             state.mode_payload["problem_market"] = problem_market
             self._advance(state, "problem_market")
 
@@ -163,16 +219,29 @@ class ValidatePipeline:
                 on_stage, 3, "Mapping Competitors...", "CompetitorAgent",
                 self._competitor.analyze(idea_profile, problem_market),
             )
-            self._save(state, "competitors.md", _md("Competitive Landscape", competitors))
+            self._save(state, "competitors.md",
+                       json.dumps(competitors, indent=2, ensure_ascii=False))
             state.mode_payload["competitors"] = competitors
             self._advance(state, "competitors")
+
+            # Evidence Search (v5.2.0) — após Mercado + Concorrência
+            if self._evidence is not None and self._evidence.enabled:
+                queries = self._evidence.plan_queries("validate", {
+                    "problem": problem_market.get("pain_description", ""),
+                    "audience": problem_market.get("audience_segment", ""),
+                })
+                results = self._evidence.search(queries)
+                sources, evidence_items = self._evidence.to_evidence(results)
+                claims = self._extract_claims(idea_profile, problem_market, evidence_items)
+                real_gaps = self._identify_evidence_gaps(problem_market, evidence_items)
 
             # 4 — Technical Feasibility
             tech = await self._run_stage(
                 on_stage, 4, "Evaluating Technical Feasibility...", "TechnicalFeasibilityAgent",
                 self._tech.analyze(idea_profile, problem_market, competitors),
             )
-            self._save(state, "technical_feasibility.md", _md("Technical Feasibility", tech))
+            self._save(state, "technical_feasibility.md",
+                       json.dumps(tech, indent=2, ensure_ascii=False))
             state.mode_payload["technical_feasibility"] = tech
             self._advance(state, "technical_feasibility")
 
@@ -181,17 +250,20 @@ class ValidatePipeline:
                 on_stage, 5, "Running Contrarian Risk Analysis...", "ContrarianRiskAgent",
                 self._contrarian.analyze(idea_profile, problem_market, competitors, tech),
             )
-            self._save(state, "risks_contrarian.md", _md("Contrarian Risks", risks))
+            self._save(state, "risks_contrarian.md",
+                       json.dumps(risks, indent=2, ensure_ascii=False))
             state.mode_payload["risks_contrarian"] = risks
             self._advance(state, "risks_contrarian")
 
-            # Lacunas de evidência + hipóteses
-            evidence_gaps = list(idea_profile.get("gaps", [])) + list(
-                problem_market.get("inferences", [])
+            # Evidence gaps (derivados + reais)
+            evidence_gaps = (
+                list(idea_profile.get("gaps", []))
+                + list(problem_market.get("inferences", []))
+                + real_gaps
             )
             state.mode_payload["evidence_gaps"] = evidence_gaps
             state.mode_payload["hypotheses"] = [
-                {"hypothesis": gap, "status": "untested"} for gap in evidence_gaps
+                {"hypothesis": g, "status": "untested"} for g in evidence_gaps
             ]
 
             # 6 — Experiment Design
@@ -199,7 +271,7 @@ class ValidatePipeline:
                 on_stage, 6, "Designing Experiments...", "ExperimentDesignAgent",
                 self._experiments.analyze(idea_profile, problem_market, evidence_gaps),
             )
-            self._save(state, "experiments.md", _md("Validation Experiments", exp))
+            self._save(state, "experiments.md", json.dumps(exp, indent=2, ensure_ascii=False))
             state.mode_payload["experiments"] = exp["experiments"]
             self._advance(state, "experiments")
 
@@ -216,11 +288,17 @@ class ValidatePipeline:
             )
             verdict = rec.get("verdict") or self._config.VALIDATE_DEFAULT_VERDICT_IF_UNCERTAIN
             rec["verdict"] = verdict
-            state.mode_payload["recommendation"] = rec
-            state.mode_payload["final_report"] = rec.get("final_report", "")
-            self._save(state, "validation_report.md", rec.get("final_report", ""))
-            self._advance(state, "report")
 
+            # Anexa seção "Evidence vs Opinion" (v5.2.0)
+            final_report = rec.get("final_report", "")
+            if evidence_items or sources or real_gaps:
+                final_report += self._evidence_section(claims, evidence_items, sources, real_gaps)
+            rec["final_report"] = final_report
+
+            state.mode_payload["recommendation"] = rec
+            state.mode_payload["final_report"] = final_report
+            self._save(state, "validation_report.md", final_report)
+            self._advance(state, "report")
             state.status = MissionStatus.COMPLETED
 
         except Exception as exc:
@@ -228,12 +306,16 @@ class ValidatePipeline:
             error_msg = f"{type(exc).__name__}: {exc}"
             state.mode_payload["error"] = error_msg
             state.mode_payload["error_stage"] = state.current_stage
-            state.mode_payload["final_report"] = (
-                f"# Validation Report (FALHA)\n\n## Erro\n```\n{error_msg}\n```\n"
-            )
             self._save_failure_report(state, error_msg)
-        finally:
-            state.updated_at = _utcnow()
-            self._artifacts.save_mission_state(state)
 
+        # Persiste EvidenceGraph (v5.2.0)
+        if evidence_items or sources:
+            graph = EvidenceGraph(
+                mission_id=state.mission_id, claims=claims,
+                evidence_items=evidence_items, sources=sources,
+                notes=self._evidence.warnings if self._evidence else [],
+            )
+            save_evidence_graph(self._artifacts.root / state.mission_id, graph)
+
+        self._artifacts.save_mission_state(state)
         return state

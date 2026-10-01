@@ -1,8 +1,5 @@
 """
-Testes de integração do Modo DISCOVER (v4.7.0) — fluxo completo + handoff.
-
-O FakeDiscoverClient é reutilizável (responde por conteúdo do prompt), pois o
-teste de handoff executa o pipeline duas vezes com o mesmo client.
+Testes de integração do Modo DISCOVER (v5.2.0 + Evidence).
 """
 
 from __future__ import annotations
@@ -12,6 +9,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from backend.core.evidence.providers import MockSearchProvider, SearchResultItem
+from backend.core.evidence.service import EvidenceService
 from backend.discover.pipeline import DiscoverPipeline
 from backend.discover.schemas import DiscoverRequest
 from backend.domain.artifacts import ArtifactManager
@@ -21,8 +20,6 @@ from backend.validate.schemas import ValidateRequest
 
 
 class FakeDiscoverClient:
-    """Cliente fake reutilizável: frame vs. candidatos por conteúdo do prompt."""
-
     def __init__(self, candidates: list[dict]) -> None:
         self._frame = {
             "theme": "serviços locais", "audience": "PMEs", "geography": "Brasil",
@@ -68,22 +65,19 @@ _CANDIDATES = [
     _cand("Agenda inteligente para barbearias"),
     _cand("Controle de estoque para restaurantes"),
     _cand("Relatórios de carbono para PMEs"),
-    _cand("Rede social para tudo"),                       # clichê
-    _cand("Agenda inteligente para barbearias e salões"),  # duplicata
+    _cand("Rede social para tudo"),
+    _cand("Agenda inteligente para barbearias e salões"),
 ]
 
 
-def _pipe(tmp_path: Path, validate=None) -> DiscoverPipeline:
+def _pipe(tmp_path: Path, validate=None, evidence=None) -> DiscoverPipeline:
     return DiscoverPipeline(
         client=FakeDiscoverClient(_CANDIDATES),
         artifact_manager=ArtifactManager(root=tmp_path),
         validate_pipeline=validate,
+        evidence_service=evidence,
     )
 
-
-# ─────────────────────────────────────────────────────────────
-# 1) Fluxo completo: ranking + rejeitadas + artefatos
-# ─────────────────────────────────────────────────────────────
 
 def test_discover_fluxo_completo_gera_artefatos(tmp_path: Path) -> None:
     pipe = _pipe(tmp_path)
@@ -107,13 +101,54 @@ def test_discover_fluxo_completo_gera_artefatos(tmp_path: Path) -> None:
     assert "# Discover Report" in report
     assert "Rejeitadas pelo Critic" in report
 
-    opps = json.loads((tmp_path / mid / "opportunities.json").read_text(encoding="utf-8"))
-    assert len(opps) == len(result.opportunities)
 
+def test_discover_com_evidence_gera_grafo(tmp_path: Path) -> None:
+    """v5.2.0: EvidenceService gera EvidenceGraph + evidence_level medium/high."""
+    mock = MockSearchProvider()
+    # Queries REAIS geradas por plan_queries("discover", scope):
+    #   1) "serviços locais para PMEs em Brasil"
+    #   2) "tendências de mercado serviços locais"
+    # Fixtures com snippets ricos que têm overlap com as oportunidades.
+    mock.add_fixture("serviços locais para PMEs em Brasil", [
+        SearchResultItem(title="PMEs crescem",
+                         snippet="PMEs adotam agenda inteligente para barbearias",
+                         url="https://ibge.gov.br/pmes", publisher="IBGE"),
+        SearchResultItem(title="Agendamento digital",
+                         snippet="Barbearias contratam controle de estoque para restaurantes",
+                         url="https://sebrae.com.br/agenda", publisher="Sebrae"),
+        SearchResultItem(title="Carbono e PMEs",
+                         snippet="Relatórios de carbono para PMEs ganham tração",
+                         url="https://gov.br/carbono", publisher="Gov"),
+    ])
+    mock.add_fixture("tendências de mercado serviços locais", [
+        SearchResultItem(title="Tendências 2025",
+                         snippet="agenda inteligente para barbearias em alta",
+                         url="https://trend.com/agenda", publisher="TrendCo"),
+    ])
+    evidence_svc = EvidenceService(provider=mock)
+    pipe = _pipe(tmp_path, evidence=evidence_svc)
+    result = asyncio.run(pipe.run(DiscoverRequest(theme="serviços locais", max_opportunities=3)))
 
-# ─────────────────────────────────────────────────────────────
-# 2) Handoff: oportunidade selecionada → ValidatePipeline
-# ─────────────────────────────────────────────────────────────
+    assert result.opportunities
+    levels = [opp.evidence_level for opp in result.opportunities]
+    assert any(level in ("medium", "high") for level in levels)
+
+    assert pipe.last_mission_id is not None
+    mid = pipe.last_mission_id
+    evidence_dir = tmp_path / mid / "evidence"
+    assert evidence_dir.exists()
+    graph_file = evidence_dir / "evidence_graph.json"
+    assert graph_file.exists()
+
+    graph_data = json.loads(graph_file.read_text(encoding="utf-8"))
+    assert graph_data["mission_id"] == mid
+    assert len(graph_data["sources"]) >= 1
+    assert len(graph_data["evidence_items"]) >= 1
+
+    report = (tmp_path / mid / "discover_report.md").read_text(encoding="utf-8")
+    assert "Evidências Externas e Sinais de Mercado" in report
+    assert "IBGE" in report or "Sebrae" in report
+
 
 def test_discover_handoff_envia_oportunidade_ao_validate(tmp_path: Path) -> None:
     fake_validate = FakeValidate()
@@ -124,8 +159,7 @@ def test_discover_handoff_envia_oportunidade_ao_validate(tmp_path: Path) -> None
     opp_id = first.opportunities[0].id
 
     second = asyncio.run(pipe.run(DiscoverRequest(
-        theme="serviços locais",
-        handoff_to_validate=True,
+        theme="serviços locais", handoff_to_validate=True,
         selected_opportunity_id=opp_id,
     )))
 
