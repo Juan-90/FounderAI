@@ -1,5 +1,5 @@
 """
-CLI helper do Modo DISCOVER (v4.7.0) — tabela de ranking + detalhes + atalhos.
+CLI helper do Modo DISCOVER (v4.7 + v5.2 Evidence).
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from backend.core.evidence.service import EvidenceService
 from backend.discover.pipeline import DiscoverPipeline
 from backend.discover.schemas import DiscoverRequest
 
@@ -21,6 +22,7 @@ async def run_discover_mode(
     max_opportunities: int = 8,
     handoff_id: Optional[str] = None,
     pipeline: Optional[DiscoverPipeline] = None,
+    evidence_service: Optional[EvidenceService] = None,
 ) -> int:
     if not intent or not intent.strip():
         console.print(Panel(
@@ -36,9 +38,11 @@ async def run_discover_mode(
         handoff_to_validate=handoff_id is not None,
         selected_opportunity_id=handoff_id,
     )
-    pipe = pipeline if pipeline is not None else DiscoverPipeline()
+    pipe = pipeline if pipeline is not None else DiscoverPipeline(evidence_service=evidence_service)
 
     console.print("[bold magenta]🧭 Modo DISCOVER[/bold magenta] — mapeamento de oportunidades")
+    if evidence_service is None:
+        console.print("[yellow]⚠  Evidência externa desabilitada (--no-evidence ou config)[/yellow]")
     result = await pipe.run(request)
 
     table = Table(title="Ranking de Oportunidades", show_header=True,

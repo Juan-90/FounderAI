@@ -1,5 +1,5 @@
 """
-Rotas REST da API FounderAI (v5.1.0).
+Rotas REST da API FounderAI (v5.1.0 + v5.2 Evidence Summary).
 
 Segurança: mission_id/file_name sanitizados contra path traversal
 (qualquer ocorrência de '..' é rejeitada com 400).
@@ -64,6 +64,23 @@ def _find_mission_dir(config: Settings, mission_id: str) -> Path | None:
     return None
 
 
+def _load_evidence_summary(mission_dir: Path) -> dict | None:
+    """Carrega resumo de evidências (sources/claims/gaps) do evidence_graph.json."""
+    evidence_file = mission_dir / "evidence" / "evidence_graph.json"
+    if not evidence_file.exists():
+        return None
+    try:
+        data = json.loads(evidence_file.read_text(encoding="utf-8"))
+        return {
+            "sources_count": len(data.get("sources", [])),
+            "claims_count": len(data.get("claims", [])),
+            "evidence_items_count": len(data.get("evidence_items", [])),
+            "gaps_count": len(data.get("notes", [])),
+        }
+    except (json.JSONDecodeError, KeyError):
+        return None
+
+
 # ── Rotas ──
 @router.get("/health", response_model=HealthResponse)
 async def health(config: Settings = Depends(get_config)) -> HealthResponse:
@@ -106,14 +123,29 @@ async def get_mission(
             state = json.loads(state_file.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             state = {}
-    return {
+    
+    # Lista artefatos (incluindo evidence/ se existir)
+    artifacts = []
+    for p in mdir.iterdir():
+        if p.is_file():
+            artifacts.append(p.name)
+        elif p.is_dir() and p.name == "evidence":
+            artifacts.append(f"{p.name}/")  # marca como diretório
+    
+    # Resumo de evidências (v5.2)
+    evidence_summary = _load_evidence_summary(mdir)
+    
+    response = {
         "mission_id": mid,
-        "artifacts": sorted(p.name for p in mdir.iterdir() if p.is_file()),
+        "artifacts": sorted(artifacts),
         "mission_state": state,
     }
+    if evidence_summary:
+        response["evidence_summary"] = evidence_summary
+    return response
 
 
-@router.get("/api/v1/artifacts/{mission_id}/{file_name}")
+@router.get("/api/v1/artifacts/{mission_id}/{file_name:path}")
 async def get_artifact(
     mission_id: str,
     file_name: str,
@@ -132,5 +164,3 @@ async def get_artifact(
         "file_name": fname,
         "content": target.read_text(encoding="utf-8"),
     }
-
-    # Router WebSocket é registrado em app.py via ws_router.

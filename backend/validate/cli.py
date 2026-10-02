@@ -1,5 +1,5 @@
 """
-CLI helper do Modo VALIDATE (v4.4.0 + erro visível no painel final).
+CLI helper do Modo VALIDATE (v4.4 + v5.2 Evidence).
 """
 
 from __future__ import annotations
@@ -9,16 +9,15 @@ from typing import Callable, Optional, Sequence
 from rich.console import Console
 from rich.panel import Panel
 
+from backend.core.evidence.service import EvidenceService
 from backend.domain.enums import MissionStatus
 from backend.validate.pipeline import ValidatePipeline
 from backend.validate.schemas import ValidateRequest
 
 console = Console()
 
-StageCallback = Callable[[int, str], None]
 
-
-def _make_stage_printer() -> StageCallback:
+def _make_stage_printer() -> Callable[[int, str], None]:
     def on_stage(index: int, label: str) -> None:
         console.print(f"[bold cyan][{index}/7][/bold cyan] {label}")
     return on_stage
@@ -29,6 +28,7 @@ async def run_validate_mode(
     context_files: Optional[Sequence[str]] = None,
     name: Optional[str] = None,
     pipeline: Optional[ValidatePipeline] = None,
+    evidence_service: Optional[EvidenceService] = None,
 ) -> int:
     if not intent or not intent.strip():
         console.print(Panel(
@@ -47,6 +47,8 @@ async def run_validate_mode(
         "[bold green]🔍 ValidateProfile ativado[/bold green] — "
         "pipeline de 7 estágios (intake → síntese)"
     )
+    if evidence_service is None:
+        console.print("[yellow]⚠  Evidência externa desabilitada (--no-evidence ou config)[/yellow]")
     console.print()
     console.print(Panel(
         f"[dim]Ideia:[/dim] [italic]{intent}[/italic]\n"
@@ -54,7 +56,7 @@ async def run_validate_mode(
         title="[bold cyan]🔍  Modo VALIDATE[/bold cyan]", border_style="cyan", padding=(1, 2),
     ))
 
-    pipe = pipeline if pipeline is not None else ValidatePipeline()
+    pipe = pipeline if pipeline is not None else ValidatePipeline(evidence_service=evidence_service)
     state = await pipe.run(request, on_stage=_make_stage_printer())
 
     rec = state.mode_payload.get("recommendation", {})
@@ -64,7 +66,11 @@ async def run_validate_mode(
     top_risks = (risks.get("reasons_to_kill") or risks.get("regulatory_risks") or [])[:3]
     experiments = state.mode_payload.get("experiments", [])
 
-    status_style = "green" if state.status == MissionStatus.COMPLETED else "red"
+    status_style = (
+        "green" if state.status == MissionStatus.COMPLETED
+        else "yellow" if state.status == MissionStatus.WAITING_HUMAN
+        else "red"
+    )
     risks_lines = "\n".join(f"   ⚠️  {r}" for r in top_risks) or "   (nenhum risco crítico listado)"
 
     error_line = ""
@@ -84,4 +90,4 @@ async def run_validate_mode(
         f"[dim]Diretório:[/dim] {pipe.artifacts.root / state.mission_id}",
         title="[bold]🔎 Validação concluída[/bold]", border_style=status_style, padding=(1, 2),
     ))
-    return 0 if state.status == MissionStatus.COMPLETED else 1
+    return 0 if state.status in (MissionStatus.COMPLETED, MissionStatus.WAITING_HUMAN) else 1

@@ -115,6 +115,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--handoff", default=None, dest="handoff_id", metavar="OPP_ID",
                         help="DISCOVER: envia a oportunidade selecionada ao VALIDATE.")
 
+    # VALIDATE / DISCOVER
+    parser.add_argument("--no-evidence", action="store_true", dest="no_evidence",
+                        help="VALIDATE/DISCOVER: desabilita busca externa (apenas opinião do modelo).")
+
     # Histórico / reexecução
     parser.add_argument("--history", action="store_true", help="Exibir histórico de deliberações.")
     parser.add_argument("-n", type=int, default=5, dest="history_limit", metavar="N",
@@ -577,6 +581,21 @@ async def main() -> None:
 
     # ── Modo VALIDATE (v4.4) ──
     if args.mission == "validate":
+            # ── Modo VALIDATE (v4.4 + v5.2) ──:
+        from backend.validate.cli import run_validate_mode
+        from backend.core.evidence.service import EvidenceService
+        from backend.core.evidence.providers import MockSearchProvider
+        
+        evidence_svc = None
+        if not args.no_evidence:
+            evidence_svc = EvidenceService()  # usa config default
+        
+        code = await run_validate_mode(
+            args.build_intent or "", 
+            context_files=args.files,
+            evidence_service=evidence_svc,
+        )
+        sys.exit(code)
         from backend.validate.cli import run_validate_mode
         code = await run_validate_mode(args.build_intent or "", context_files=args.files)
         sys.exit(code)
@@ -604,6 +623,21 @@ async def main() -> None:
 
     # ── Modo DISCOVER (v4.7) ──
     if args.mission == "discover":
+            # ── Modo DISCOVER (v4.7 + v5.2) ──
+        from backend.discover.cli import run_discover_mode
+        from backend.core.evidence.service import EvidenceService
+        
+        evidence_svc = None
+        if not args.no_evidence:
+            evidence_svc = EvidenceService()  # usa config default
+        
+        code = await run_discover_mode(
+            args.build_intent or "",
+            max_opportunities=args.max_opportunities,
+            handoff_id=args.handoff_id,
+            evidence_service=evidence_svc,
+        )
+        sys.exit(code)
         from backend.discover.cli import run_discover_mode
         code = await run_discover_mode(
             args.build_intent or "",
