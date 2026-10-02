@@ -81,14 +81,9 @@ class EvidenceService:
         return self._config.EVIDENCE_ENABLED
 
     def _default_provider(self) -> SearchProvider:
-        prov = (self._config.EVIDENCE_PROVIDER or "mock").lower()
-        if prov == "http":
-            return HttpSearchProvider(
-                endpoint=self._config.EVIDENCE_HTTP_ENDPOINT or "",
-                api_key=self._config.EVIDENCE_HTTP_API_KEY,
-                timeout_seconds=self._config.EVIDENCE_TIMEOUT_SECONDS,
-            )
-        return MockSearchProvider()
+        from backend.core.evidence.providers import get_search_provider
+        return get_search_provider(self._config.EVIDENCE_PROVIDER or "mock",
+                                   config=self._config)
 
     # ── Plan ──
     def plan_queries(self, mode: str, payload: dict[str, Any]) -> list[SearchQuery]:

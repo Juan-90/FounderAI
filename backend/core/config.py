@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     EVIDENCE_TIMEOUT_SECONDS: float = 10.0
     EVIDENCE_FAIL_OPEN: bool = True
 
+        # Provedores reais de busca (v5.2.1)
+    TAVILY_API_KEY: str = ""
+    SERPER_API_KEY: str = ""
+
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_timeout: float = 60.0
