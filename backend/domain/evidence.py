@@ -1,30 +1,23 @@
 """
-Modelos de domínio do sistema de evidências do FounderAI (v5.2.0).
-
-Camada de base agnóstica de provedor/origem: modela fontes, itens de
-evidência, alegações (claims) e o grafo que os conecta por missão.
+Modelos de domínio do sistema de evidências do FounderAI (v5.2.1 + métricas).
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
 
 class EvidenceOrigin(str, Enum):
-    """Origem de uma evidência ou alegação."""
-
     MODEL_OPINION = "model_opinion"
     USER_CONTEXT = "user_context"
     EXTERNAL = "external"
 
 
 class Source(BaseModel):
-    """Fonte externa de evidência (documento, página, dataset, etc.)."""
-
     source_id: str
     title: Optional[str] = None
     url: Optional[str] = None
@@ -34,8 +27,6 @@ class Source(BaseModel):
 
 
 class EvidenceItem(BaseModel):
-    """Um item de evidência extraído de uma fonte específica."""
-
     evidence_id: str
     source_id: str
     quote_or_summary: str
@@ -45,8 +36,6 @@ class EvidenceItem(BaseModel):
 
 
 class Claim(BaseModel):
-    """Alegação fundamentada por evidências."""
-
     claim_id: str
     text: str
     origin: EvidenceOrigin
@@ -56,10 +45,14 @@ class Claim(BaseModel):
 
 
 class EvidenceGraph(BaseModel):
-    """Grafo de evidências associado a uma missão."""
+    """Grafo de evidências + métricas de observabilidade (v5.2.1)."""
 
     mission_id: str
     claims: list[Claim] = Field(default_factory=list)
     evidence_items: list[EvidenceItem] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Observabilidade: provider_used, cache_hits/misses, deduped_*",
+    )

@@ -1,0 +1,61 @@
+{
+  "mission_id": "5d8c7df4a67e46279fd20583342d655a",
+  "project_id": "98ab355526d34d749904e941cda6ec39",
+  "mode": "DISCOVER",
+  "status": "COMPLETED",
+  "current_stage": "report",
+  "mode_payload": {
+    "theme": "Tema",
+    "scope": {
+      "theme": "Tema",
+      "audience": "Não informado",
+      "geography": "Brasil",
+      "constraints": [],
+      "attractiveness_criteria": [
+        "Potencial de mercado",
+        "Inovação",
+        "Escalabilidade"
+      ]
+    },
+    "candidate_count": 4,
+    "rejected_count": 0,
+    "handoff": null,
+    "summary": "4 oportunidade(s) selecionada(s) de 4 candidatas; 0 rejeitada(s) pelo critic. Top: AgroData Cloud."
+  },
+  "artifacts": [
+    {
+      "id": "70f4ee28c2bc46f290678067d2f67764",
+      "name": "scope.json",
+      "type": "json",
+      "path": "5d8c7df4a67e46279fd20583342d655a/scope.json",
+      "content": "{\n  \"theme\": \"Tema\",\n  \"audience\": \"Não informado\",\n  \"geography\": \"Brasil\",\n  \"constraints\": [],\n  \"attractiveness_criteria\": [\n    \"Potencial de mercado\",\n    \"Inovação\",\n    \"Escalabilidade\"\n  ]\n}",
+      "created_at": "2026-10-08T09:37:14.831998Z"
+    },
+    {
+      "id": "afcb9f18a6664f51b7a3fd8da29ef725",
+      "name": "opportunities.json",
+      "type": "json",
+      "path": "5d8c7df4a67e46279fd20583342d655a/opportunities.json",
+      "content": "[\n  {\n    \"id\": \"opp-0-agrodata-cloud\",\n    \"title\": \"AgroData Cloud\",\n    \"one_liner\": \"A cloud platform that turns satellite, drone, and IoT data into actionable insights for Brazilian farms\",\n    \"problem\": \"Farmers lack real‑time, data‑driven decision tools to optimize yields and reduce inputs\",\n    \"audience\": \"Medium to large commercial farms\",\n    \"why_now\": \"Satellite imagery costs have dropped, IoT sensors are more affordable, and AI analytics are maturing\",\n    \"solution_sketch\": \"Integrate satellite feeds, drone captures, and field sensors into a unified dashboard that uses AI to predict pest outbreaks, irrigation needs, and optimal harvest windows\",\n    \"business_model_hint\": \"Monthly subscription + revenue share on data marketplace sales\",\n    \"score\": 0.852,\n    \"score_breakdown\": {\n      \"dor_percebida\": 0.648,\n      \"viabilidade_mvp\": 0.9,\n      \"potencial_pagamento\": 1.0,\n      \"diferenciacao\": 1.0\n    },\n    \"risks\": [\n      \"Data accuracy and latency\",\n      \"Farmer adoption curve\"\n    ],\n    \"assumptions\": [\n      \"Farmers are willing to pay for predictive insights\",\n      \"Data providers can supply high‑resolution imagery\"\n    ],\n    \"evidence_level\": \"low\",\n    \"tags\": [\n      \"agritech\",\n      \"data\",\n      \"AI\",\n      \"sustainability\"\n    ]\n  },\n  {\n    \"id\": \"opp-2-eduflex-microlearning\",\n    \"title\": \"EduFlex Microlearning\",\n    \"one_liner\": \"An AI‑driven microlearning platform that delivers bite‑size, adaptive courses to mid‑career professionals\",\n    \"problem\": \"Adult learners need flexible, time‑efficient training that fits into busy schedules\",\n    \"audience\": \"Mid‑career professionals and corporate HR teams\",\n    \"why_now\": \"Remote work has increased skill gaps and demand for continuous learning\",\n    \"solution_sketch\": \"Adaptive algorithm curates short modules, gamifies progress, and integrates with existing LMS\",\n    \"business_model_hint\": \"B2B subscription with tiered access and analytics\",\n    \"score\": 0.839,\n    \"score_breakdown\": {\n      \"dor_percebida\": 0.632,\n      \"viabilidade_mvp\": 0.9,\n      \"potencial_pagamento\": 1.0,\n      \"diferenciacao\": 0.955\n    },\n    \"risks\": [\n      \"Maintaining high‑quality content\",\n      \"Competition from established LMS providers\"\n    ],\n    \"assumptions\": [\n      \"Companies invest in upskilling employees\",\n      \"Learners prefer micro‑learning\"\n    ],\n    \"evidence_level\": \"low\",\n    \"tags\": [\n      \"edtech\",\n      \"AI\",\n      \"microlearning\"\n    ]\n  },\n  {\n    \"id\": \"opp-1-healthlink-tele-pharmacy\",\n    \"title\": \"HealthLink Tele‑Pharmacy\",\n    \"one_liner\": \"A tele‑pharmacy network that delivers prescriptions to rural homes via micro‑fulfillment hubs\",\n    \"problem\": \"Rural patients face long travel times and limited pharmacy access\",\n    \"audience\": \"Rural residents and local health centers\",\n    \"why_now\": \"Telehealth adoption accelerated by COVID, and logistics tech is maturing\",\n    \"solution_sketch\": \"Mobile app for prescription requests, AI triage, and local hubs that store and dispense medications\",\n    \"business_model_hint\": \"Commission on each prescription plus subscription for premium services\",\n    \"score\": 0.815,\n    \"score_breakdown\": {\n      \"dor_percebida\": 0.56,\n      \"viabilidade_mvp\": 0.9,\n      \"potencial_pagamento\": 1.0,\n      \"diferenciacao\": 0.96\n    },\n    \"risks\": [\n      \"Regulatory compliance with pharmaceutical distribution\",\n      \"Supply chain reliability\"\n    ],\n    \"assumptions\": [\n      \"Pharmacies will partner for fulfillment\",\n      \"Patients trust digital prescriptions\"\n    ],\n    \"evidence_level\": \"low\",\n    \"tags\": [\n      \"healthtech\",\n      \"telemedicine\",\n      \"logistics\"\n    ]\n  },\n  {\n    \"id\": \"opp-3-ecopack\",\n    \"title\": \"EcoPack\",\n    \"one_liner\": \"Biodegradable packaging made from cassava peels that replaces conventional plastics in the food sector\",\n    \"problem\": \"Plastic waste is a major environmental and regulatory challenge in Brazil\",\n    \"audience\": \"Food and beverage manufacturers\",\n    \"why_now\": \"Regulatory push against single‑use plastics and rising consumer demand for sustainable packaging\",\n    \"solution_sketch\": \"Process cassava peels into film and containers, certify biodegradability, and offer design services\",\n    \"business_model_hint\": \"B2B sales + licensing of proprietary process\",\n    \"score\": 0.802,\n    \"score_breakdown\": {\n      \"dor_percebida\": 0.592,\n      \"viabilidade_mvp\": 0.9,\n      \"potencial_pagamento\": 1.0,\n      \"diferenciacao\": 0.8\n    },\n    \"risks\": [\n      \"Securing a consistent waste feedstock\",\n      \"Manufacturers’ willingness to switch\"\n    ],\n    \"assumptions\": [\n      \"Manufacturers can meet quality standards with biodegradable material\",\n      \"Supply chain can scale\"\n    ],\n    \"evidence_level\": \"low\",\n    \"tags\": [\n      \"\"\n    ]\n  }\n]",
+      "created_at": "2026-10-08T09:37:14.835409Z"
+    },
+    {
+      "id": "99e4cef639b045c9ac7804d961fde845",
+      "name": "rejected.json",
+      "type": "json",
+      "path": "5d8c7df4a67e46279fd20583342d655a/rejected.json",
+      "content": "[]",
+      "created_at": "2026-10-08T09:37:14.858374Z"
+    },
+    {
+      "id": "7e59cd517e664fb08fd7a9e6a7e82e5a",
+      "name": "discover_report.md",
+      "type": "md",
+      "path": "5d8c7df4a67e46279fd20583342d655a/discover_report.md",
+      "content": "# Discover Report\n\n## Escopo\n- Tema: Tema\n- Público: Não informado\n- Geografia: Brasil\n- Critérios: Potencial de mercado, Inovação, Escalabilidade\n\n## Oportunidades Ranqueadas\n1. **AgroData Cloud** — score 0.85 (evidência low)\n   - A cloud platform that turns satellite, drone, and IoT data into actionable insights for Brazilian farms\n2. **EduFlex Microlearning** — score 0.84 (evidência low)\n   - An AI‑driven microlearning platform that delivers bite‑size, adaptive courses to mid‑career professionals\n3. **HealthLink Tele‑Pharmacy** — score 0.81 (evidência low)\n   - A tele‑pharmacy network that delivers prescriptions to rural homes via micro‑fulfillment hubs\n4. **EcoPack** — score 0.80 (evidência low)\n   - Biodegradable packaging made from cassava peels that replaces conventional plastics in the food sector\n\n## Evidências Externas e Sinais de Mercado\n- 6 evidência(s) de 6 fonte(s).\n  - **Mock result 1 for 'Tema para Não informado em Brasil'** (mock-publisher)\n    - URL: https://mock.example/88ff8bcb/1\n  - **Mock result 2 for 'Tema para Não informado em Brasil'** (mock-publisher)\n    - URL: https://mock.example/88ff8bcb/2\n  - **Mock result 3 for 'Tema para Não informado em Brasil'** (mock-publisher)\n    - URL: https://mock.example/88ff8bcb/3\n  - **Mock result 1 for 'tendências de mercado Tema'** (mock-publisher)\n    - URL: https://mock.example/16240b83/1\n  - **Mock result 2 for 'tendências de mercado Tema'** (mock-publisher)\n    - URL: https://mock.example/16240b83/2\n\n## Rejeitadas pelo Critic\n- (nenhuma)\n\n## Próximos passos\n- Validar a top: python main.py validate \"<título: one_liner>\"\n- Ou handoff direto: python main.py discover \"<tema>\" --handoff <id>\n",
+      "created_at": "2026-10-08T09:37:14.860368Z"
+    }
+  ],
+  "created_at": "2026-10-08T09:37:14.822597Z",
+  "updated_at": "2026-10-08T09:37:14.822597Z"
+}

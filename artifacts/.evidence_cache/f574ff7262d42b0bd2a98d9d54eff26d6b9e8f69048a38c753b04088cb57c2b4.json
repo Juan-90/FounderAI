@@ -1,0 +1,30 @@
+{
+  "provider": "tavily",
+  "query": "concorrentes No pain or problem identified in the provided information.",
+  "normalized_query": "concorrentes no pain or problem identified in the provided information.",
+  "results": [
+    {
+      "title": "Mock result 1 for 'concorrentes No pain or problem identifi'",
+      "snippet": "Deterministic snippet 1 (digest prefix: 94be97fb).",
+      "url": "https://mock.example/94be97fb/1",
+      "publisher": "mock-publisher",
+      "score": 1.0
+    },
+    {
+      "title": "Mock result 2 for 'concorrentes No pain or problem identifi'",
+      "snippet": "Deterministic snippet 2 (digest prefix: 94be97fb).",
+      "url": "https://mock.example/94be97fb/2",
+      "publisher": "mock-publisher",
+      "score": 0.9
+    },
+    {
+      "title": "Mock result 3 for 'concorrentes No pain or problem identifi'",
+      "snippet": "Deterministic snippet 3 (digest prefix: 94be97fb).",
+      "url": "https://mock.example/94be97fb/3",
+      "publisher": "mock-publisher",
+      "score": 0.8
+    }
+  ],
+  "stored_at": "2026-10-08T09:36:44.472173+00:00",
+  "ttl_seconds": 86400
+}

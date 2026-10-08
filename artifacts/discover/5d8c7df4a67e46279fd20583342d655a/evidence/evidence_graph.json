@@ -1,0 +1,139 @@
+{
+  "mission_id": "5d8c7df4a67e46279fd20583342d655a",
+  "claims": [
+    {
+      "claim_id": "cl-1",
+      "text": "A cloud platform that turns satellite, drone, and IoT data into actionable insights for Brazilian farms",
+      "origin": "model_opinion",
+      "confidence": 0.5,
+      "evidence_ids": [],
+      "used_in_decision": false
+    },
+    {
+      "claim_id": "cl-2",
+      "text": "An AI‑driven microlearning platform that delivers bite‑size, adaptive courses to mid‑career professionals",
+      "origin": "model_opinion",
+      "confidence": 0.5,
+      "evidence_ids": [],
+      "used_in_decision": false
+    },
+    {
+      "claim_id": "cl-3",
+      "text": "A tele‑pharmacy network that delivers prescriptions to rural homes via micro‑fulfillment hubs",
+      "origin": "model_opinion",
+      "confidence": 0.5,
+      "evidence_ids": [],
+      "used_in_decision": false
+    },
+    {
+      "claim_id": "cl-4",
+      "text": "Biodegradable packaging made from cassava peels that replaces conventional plastics in the food sector",
+      "origin": "model_opinion",
+      "confidence": 0.5,
+      "evidence_ids": [],
+      "used_in_decision": false
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ev-c2184268d368",
+      "source_id": "src-e99fc14ec370",
+      "quote_or_summary": "Deterministic snippet 1 (digest prefix: 88ff8bcb).",
+      "origin": "external",
+      "confidence": 1.0,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-c6cfb6d7a4a2",
+      "source_id": "src-41668d6c54c3",
+      "quote_or_summary": "Deterministic snippet 2 (digest prefix: 88ff8bcb).",
+      "origin": "external",
+      "confidence": 0.9,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-40e5babfa582",
+      "source_id": "src-f31c674224e4",
+      "quote_or_summary": "Deterministic snippet 3 (digest prefix: 88ff8bcb).",
+      "origin": "external",
+      "confidence": 0.8,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-b41344b485eb",
+      "source_id": "src-e3a284154019",
+      "quote_or_summary": "Deterministic snippet 1 (digest prefix: 16240b83).",
+      "origin": "external",
+      "confidence": 1.0,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-94dee6cbcf4a",
+      "source_id": "src-1fe37aa9bc14",
+      "quote_or_summary": "Deterministic snippet 2 (digest prefix: 16240b83).",
+      "origin": "external",
+      "confidence": 0.9,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-97cc3093356b",
+      "source_id": "src-a68adecd2a0c",
+      "quote_or_summary": "Deterministic snippet 3 (digest prefix: 16240b83).",
+      "origin": "external",
+      "confidence": 0.8,
+      "tags": []
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "src-e99fc14ec370",
+      "title": "Mock result 1 for 'Tema para Não informado em Brasil'",
+      "url": "https://mock.example/88ff8bcb/1",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-08T09:37:14.819777Z",
+      "raw_snippet": "Deterministic snippet 1 (digest prefix: 88ff8bcb)."
+    },
+    {
+      "source_id": "src-41668d6c54c3",
+      "title": "Mock result 2 for 'Tema para Não informado em Brasil'",
+      "url": "https://mock.example/88ff8bcb/2",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-08T09:37:14.819777Z",
+      "raw_snippet": "Deterministic snippet 2 (digest prefix: 88ff8bcb)."
+    },
+    {
+      "source_id": "src-f31c674224e4",
+      "title": "Mock result 3 for 'Tema para Não informado em Brasil'",
+      "url": "https://mock.example/88ff8bcb/3",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-08T09:37:14.819777Z",
+      "raw_snippet": "Deterministic snippet 3 (digest prefix: 88ff8bcb)."
+    },
+    {
+      "source_id": "src-e3a284154019",
+      "title": "Mock result 1 for 'tendências de mercado Tema'",
+      "url": "https://mock.example/16240b83/1",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-08T09:37:14.819777Z",
+      "raw_snippet": "Deterministic snippet 1 (digest prefix: 16240b83)."
+    },
+    {
+      "source_id": "src-1fe37aa9bc14",
+      "title": "Mock result 2 for 'tendências de mercado Tema'",
+      "url": "https://mock.example/16240b83/2",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-08T09:37:14.819777Z",
+      "raw_snippet": "Deterministic snippet 2 (digest prefix: 16240b83)."
+    },
+    {
+      "source_id": "src-a68adecd2a0c",
+      "title": "Mock result 3 for 'tendências de mercado Tema'",
+      "url": "https://mock.example/16240b83/3",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-08T09:37:14.819777Z",
+      "raw_snippet": "Deterministic snippet 3 (digest prefix: 16240b83)."
+    }
+  ],
+  "notes": [],
+  "metrics": {}
+}

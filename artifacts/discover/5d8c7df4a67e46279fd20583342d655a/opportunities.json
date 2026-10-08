@@ -1,0 +1,125 @@
+[
+  {
+    "id": "opp-0-agrodata-cloud",
+    "title": "AgroData Cloud",
+    "one_liner": "A cloud platform that turns satellite, drone, and IoT data into actionable insights for Brazilian farms",
+    "problem": "Farmers lack real‑time, data‑driven decision tools to optimize yields and reduce inputs",
+    "audience": "Medium to large commercial farms",
+    "why_now": "Satellite imagery costs have dropped, IoT sensors are more affordable, and AI analytics are maturing",
+    "solution_sketch": "Integrate satellite feeds, drone captures, and field sensors into a unified dashboard that uses AI to predict pest outbreaks, irrigation needs, and optimal harvest windows",
+    "business_model_hint": "Monthly subscription + revenue share on data marketplace sales",
+    "score": 0.852,
+    "score_breakdown": {
+      "dor_percebida": 0.648,
+      "viabilidade_mvp": 0.9,
+      "potencial_pagamento": 1.0,
+      "diferenciacao": 1.0
+    },
+    "risks": [
+      "Data accuracy and latency",
+      "Farmer adoption curve"
+    ],
+    "assumptions": [
+      "Farmers are willing to pay for predictive insights",
+      "Data providers can supply high‑resolution imagery"
+    ],
+    "evidence_level": "low",
+    "tags": [
+      "agritech",
+      "data",
+      "AI",
+      "sustainability"
+    ]
+  },
+  {
+    "id": "opp-2-eduflex-microlearning",
+    "title": "EduFlex Microlearning",
+    "one_liner": "An AI‑driven microlearning platform that delivers bite‑size, adaptive courses to mid‑career professionals",
+    "problem": "Adult learners need flexible, time‑efficient training that fits into busy schedules",
+    "audience": "Mid‑career professionals and corporate HR teams",
+    "why_now": "Remote work has increased skill gaps and demand for continuous learning",
+    "solution_sketch": "Adaptive algorithm curates short modules, gamifies progress, and integrates with existing LMS",
+    "business_model_hint": "B2B subscription with tiered access and analytics",
+    "score": 0.839,
+    "score_breakdown": {
+      "dor_percebida": 0.632,
+      "viabilidade_mvp": 0.9,
+      "potencial_pagamento": 1.0,
+      "diferenciacao": 0.955
+    },
+    "risks": [
+      "Maintaining high‑quality content",
+      "Competition from established LMS providers"
+    ],
+    "assumptions": [
+      "Companies invest in upskilling employees",
+      "Learners prefer micro‑learning"
+    ],
+    "evidence_level": "low",
+    "tags": [
+      "edtech",
+      "AI",
+      "microlearning"
+    ]
+  },
+  {
+    "id": "opp-1-healthlink-tele-pharmacy",
+    "title": "HealthLink Tele‑Pharmacy",
+    "one_liner": "A tele‑pharmacy network that delivers prescriptions to rural homes via micro‑fulfillment hubs",
+    "problem": "Rural patients face long travel times and limited pharmacy access",
+    "audience": "Rural residents and local health centers",
+    "why_now": "Telehealth adoption accelerated by COVID, and logistics tech is maturing",
+    "solution_sketch": "Mobile app for prescription requests, AI triage, and local hubs that store and dispense medications",
+    "business_model_hint": "Commission on each prescription plus subscription for premium services",
+    "score": 0.815,
+    "score_breakdown": {
+      "dor_percebida": 0.56,
+      "viabilidade_mvp": 0.9,
+      "potencial_pagamento": 1.0,
+      "diferenciacao": 0.96
+    },
+    "risks": [
+      "Regulatory compliance with pharmaceutical distribution",
+      "Supply chain reliability"
+    ],
+    "assumptions": [
+      "Pharmacies will partner for fulfillment",
+      "Patients trust digital prescriptions"
+    ],
+    "evidence_level": "low",
+    "tags": [
+      "healthtech",
+      "telemedicine",
+      "logistics"
+    ]
+  },
+  {
+    "id": "opp-3-ecopack",
+    "title": "EcoPack",
+    "one_liner": "Biodegradable packaging made from cassava peels that replaces conventional plastics in the food sector",
+    "problem": "Plastic waste is a major environmental and regulatory challenge in Brazil",
+    "audience": "Food and beverage manufacturers",
+    "why_now": "Regulatory push against single‑use plastics and rising consumer demand for sustainable packaging",
+    "solution_sketch": "Process cassava peels into film and containers, certify biodegradability, and offer design services",
+    "business_model_hint": "B2B sales + licensing of proprietary process",
+    "score": 0.802,
+    "score_breakdown": {
+      "dor_percebida": 0.592,
+      "viabilidade_mvp": 0.9,
+      "potencial_pagamento": 1.0,
+      "diferenciacao": 0.8
+    },
+    "risks": [
+      "Securing a consistent waste feedstock",
+      "Manufacturers’ willingness to switch"
+    ],
+    "assumptions": [
+      "Manufacturers can meet quality standards with biodegradable material",
+      "Supply chain can scale"
+    ],
+    "evidence_level": "low",
+    "tags": [
+      ""
+    ]
+  }
+]

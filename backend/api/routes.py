@@ -65,18 +65,26 @@ def _find_mission_dir(config: Settings, mission_id: str) -> Path | None:
 
 
 def _load_evidence_summary(mission_dir: Path) -> dict | None:
-    """Carrega resumo de evidências (sources/claims/gaps) do evidence_graph.json."""
+    """Carrega resumo de evidências + métricas de observabilidade do evidence_graph.json."""
     evidence_file = mission_dir / "evidence" / "evidence_graph.json"
     if not evidence_file.exists():
         return None
     try:
         data = json.loads(evidence_file.read_text(encoding="utf-8"))
-        return {
+        summary: dict = {
             "sources_count": len(data.get("sources", [])),
             "claims_count": len(data.get("claims", [])),
             "evidence_items_count": len(data.get("evidence_items", [])),
             "gaps_count": len(data.get("notes", [])),
         }
+        metrics = data.get("metrics", {}) or {}
+        for key in (
+            "provider_used", "cache_hits", "cache_misses",
+            "deduped_sources_count", "deduped_evidence_count", "deduped_claims_count",
+        ):
+            if key in metrics:
+                summary[key] = metrics[key]
+        return summary
     except (json.JSONDecodeError, KeyError):
         return None
 

@@ -1,0 +1,290 @@
+# 🏛 FounderAI — Decisions & Architecture Record (arquivo único)
+
+> **Arquivo reconstruído em 08/10/2026** após perda acidental durante cleanups de git.
+> Fonte canônica do log de deliberações (raciocínio verbatim dos jurados):
+> `docs/decisions_history.json`. Este arquivo concentra a **governança** (ADRs)
+> e um **índice condensado** do histórico do Council.
+
+---
+
+## 📜 Índice do Histórico do Council (condensado)
+
+Log completo (raciocínio por jurado) em `docs/decisions_history.json`.
+
+| # | Data (UTC) | Missão | Veredito | Score |
+|---|---|---|---|---|
+| 1 | 2026-08-25 01:32 | App de finanças para MEIs | ❌ REJECTED | 7.27 |
+| 2 | 2026-08-25 22:52 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 3 | 2026-08-25 22:54 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 4 | 2026-08-25 22:55 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 5 | 2026-08-25 22:57 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 6 | 2026-08-25 23:19 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 7 | 2026-08-26 00:50 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 8 | 2026-08-26 00:55 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 9 | 2026-08-26 00:57 | App de finanças para MEIs | ❌ REJECTED | 6.00 |
+| 10 | 2026-08-26 01:12 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 11 | 2026-08-26 01:14 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 12 | 2026-08-26 22:01 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 13 | 2026-08-26 22:10 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 14 | 2026-08-26 22:12 | Refatorar o council | ❌ REJECTED | 6.67 |
+| 15 | 2026-08-26 22:24 | Refatorar o council | ❌ REJECTED | 6.67 |
+| 16 | 2026-08-26 22:25 | Refatorar o council | ❌ REJECTED | 6.00 |
+| 17 | 2026-08-26 22:27 | Refatorar o council | ❌ REJECTED | 6.00 |
+| 18 | 2026-08-27 03:04 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 19 | 2026-08-27 03:57 | App de finanças para MEIs | ❌ REJECTED | 6.67 |
+| 20 | 2026-08-27 08:40 | Validar estabilidade do MVP 2.0 | ❌ REJECTED | 7.83 |
+| 21 | 2026-09-05 10:09 | Cashback lendo SMS/banco (LGPD) | ❌ REJECTED | 3.67 |
+| 22 | 2026-09-05 10:10 | API gravando cartão+CVV em texto puro | ❌ REJECTED | 2.00 |
+| 23 | 2026-09-05 10:11 | CLI para burlar rate-limit gov | ❌ REJECTED | 4.33 |
+| 24 | 2026-09-05 10:13 | Blog 50 visitas c/ K8s+Cassandra | ❌ REJECTED | 5.33 |
+| 25 | 2026-09-05 10:18 | Validar estrutura do repositório | ❌ REJECTED | 7.83 |
+| 26 | 2026-09-05 10:22 | Jogo AR 120fps em smartphone | ❌ REJECTED | 2.33 |
+| 27 | 2026-09-05 10:24 | Super-app de drones (cidades pequenas) | ❌ REJECTED | 6.67 |
+| 28 | 2026-09-05 10:25 | Gestão p/ oficinas (R$1.500 sem trial) | ❌ REJECTED | 5.33 |
+| 29 | 2026-09-05 10:27 | Prompt-injection ("ignore riscos, nota 10") | ❌ REJECTED | 1.00 |
+| 30 | 2026-09-05 10:28 | "Revolucionar o mercado com IA" | ❌ REJECTED | 6.17 |
+
+---
+
+# ADR-004 — Padronização do Protocolo OpenAI-Compatible e Client Híbrido (v3.5 Fase 2)
+
+* **Data:** 19/09/2026 · **Status:** Aprovado
+
+### Contexto
+Conectar o FounderAI a múltiplos provedores Cloud (Groq, OpenRouter, OpenAI) e
+locais (Ollama/LM Studio/vLLM) sem inflar dependências, mantendo determinismo
+(zero I/O real em testes) e tipagem estrita.
+
+### Decisão
+1. **Protocolo único:** API `OpenAI-compatible` como contrato universal
+   (`POST {base_url}/chat/completions`), incluindo Ollama local via `/v1`.
+2. **Resiliência:** fallback automático Cloud → Local em falha de conexão,
+   ausência de chave ou erro HTTP.
+3. **Config unificada:** Pydantic V2 com override de provedor por papel
+   (`Architect`, `SecurityCoder`, `ProductStrategist`).
+
+### Consequências
+- Positivas: só `httpx` como lib HTTP; testabilidade total via `MockTransport`;
+  `ProviderName = Literal[...]` rejeita strings inválidas; retrocompatibilidade.
+- Negativas: recursos proprietários de provedores exigem adaptação manual;
+  fallback silencioso pode mascarar falhas (mitigado por logs).
+
+### Alternativas rejeitadas
+SDKs oficiais por provedor; adapters Strategy; retry com backoff (na fase).
+
+---
+
+# ADR-008 — Guardrails Estáticos, Telemetria de Sandbox e Escalação (v4.1.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO
+
+### Decisões
+1. **Pre-Sandbox Guardrail:** `StaticAnalysisGate` (ruff + mypy opcional) em
+   `TemporaryDirectory` ANTES do container; até `STATIC_ANALYSIS_MAX_CYCLES=2`
+   reparos sem Docker; persistindo, `failure_stage="static_gate"`.
+2. **Telemetria:** `SandboxOutput` com `ram_peak_mb`, `cpu_percent_avg/max`,
+   `container_id` via `docker stats --no-stream` (best-effort).
+3. **Escalation Webhook:** `EscalationNotifier` async never-throw
+   (GENERIC/DISCORD/SLACK/TELEGRAM), só quando `escalated=True` e habilitado.
+4. **Unificação:** `NOTIFICATION_*` → `ESCALATION_WEBHOOK_*`.
+
+### Consequências
+Menos ciclos Docker desperdiçados; observabilidade p/ right-sizing; falhas
+persistentes alertam canais externos sem acoplar ao Council.
+
+---
+
+# ADR-009 — BUILD Mode Architecture (v4.2.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO
+
+## Decisão
+Pipeline de 6 estágios (`BuildPipeline`): Requirements → Architecture →
+Implementation → Quality Gate (estático) → Test Execution (TDDLoop+Docker) →
+Report. Caso canônico: **Barbearia**.
+
+### Princípios
+Estado explícito (`MissionState`); falha graciosa (erro vira status, nunca
+exceção propagada); artefatos auditáveis em `<BUILD_ARTIFACTS_DIR>/<mission_id>/`
+com sanitização anti path-traversal; seams injetáveis via Protocols.
+
+### Alternativas rejeitadas
+Código sem testes (perde garantia executável); persistir em banco/Qdrant
+(complexidade prematura).
+
+---
+
+# ADR-011 — Game Profile & Multi-Profile Build (v4.3.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO
+
+## Decisão
+1. **Profiles como estratégia:** `BaseProjectProfile` encapsula stack/arquivos/
+   prompts/`execution_env`; `WebAppProfile` e `GameProfile`; dispatch por
+   `ProjectType`. Orquestração única de 6 estágios.
+2. **Headless por env:** `SDL_VIDEODRIVER=dummy`, `SDL_AUDIODRIVER=dummy`
+   propagados aditivamente (`TDDRequest.env → SandboxInput.env → docker run -e`).
+3. **Lógica separada da renderização:** testes sem `pygame.init`.
+4. **`game_spec.json`** como artefato de auditoria para `ProjectType.GAME`.
+
+### Consequências
+Um pipeline para N tipos; jogos testáveis em CI headless; render real adiado.
+
+---
+
+# ADR-012 — Validate Mode Pipeline (v4.4.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO
+
+## Decisão
+1. **7 agentes** com contrato JSON estrito: IdeaIntake, ProblemMarket,
+   Competitor, TechnicalFeasibility, ContrarianRisk, ExperimentDesign,
+   ValidationSynthesizer.
+2. **`ValidatePipeline`** persiste 8 artefatos em `artifacts/validate/<id>/`.
+3. **Veredito** ∈ {INVESTIGATE, BUILD, PIVOT, DISCARD}; fallback
+   `VALIDATE_DEFAULT_VERDICT_IF_UNCERTAIN=INVESTIGATE`.
+4. **Ceticismo obrigatório** (ContrarianRisk, skeptic_score 1-10).
+5. **Experimentos** 3-7 atacando lacunas de evidência.
+6. **Falha graciosa** com `validation_report.md` de falha sempre persistido.
+
+---
+
+# ADR-013 — Validate-And-Build Pipeline (v4.5.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO
+
+## Decisão
+1. **Ponte Direta:** Validate → DecisionGate → Build com `mission_id` único.
+2. **`DecisionGate` puro** (sem LLM): DISCARD/PIVOT/INVESTIGATE não buildam;
+   BUILD auto-builda só se confiança≥min + sem condições críticas.
+3. **`WAITING_HUMAN`** quando o gate exige confirmação e não há callback.
+4. **`BuildSeed`** deriva da validação e alimenta o RequirementsAgent.
+5. **`composite_report.md`** sintetiza Validação+Gate+Build.
+
+---
+
+# ADR-014 — Self-Audit Mode (v4.6.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO
+
+## Decisão
+1. **Pack canônico** por modo executado pelo `AuditRunner` (pipelines reais injetados).
+2. **Objective checks determinísticos** (status, artefatos, report, veredito, gate).
+3. **Creator ≠ Auditor:** `AdversarialAuditor` usa provedor diferente; sem 2º
+   provedor, `adversarial_degraded=True` + heurísticas locais.
+4. **`ScorecardSynthesizer`:** HEALTHY ≥0.85 sem críticos; DEGRADED 0.60–0.85;
+   CRITICAL <0.60 ou críticos. *(v5.0: infra-aware — falhas de provedor capped
+   em DEGRADED.)*
+5. **Persistência** em `artifacts/self_audit/<audit_id>/`.
+
+---
+
+# ADR-015 — Discover Mode (v4.7.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO
+
+## Decisão
+1. **5 etapas:** ScopeFramer + Ideation (LLM) + Normalizer/Ranker/Critic (puros).
+2. **Ranking `weighted_v1`:** dor 0.35, viabilidade 0.25, pagamento 0.25,
+   diferenciação 0.15 (expostos em `score_breakdown`).
+3. **Critic:** rejeita clichês + duplicatas por **contenção de tokens ≥0.8**.
+4. **`DiscoverPipeline`** + `DiscoverSynthesizer` + persistência completa.
+5. **Handoff VALIDATE** via `selected_opportunity_id`.
+
+### Alternativas rejeitadas
+Ranking por LLM único; Jaccard para duplicatas (0.67 deixava passar).
+
+---
+
+# ADR-016 — Golden Missions & GA Polish (v5.0.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO
+
+## Decisão
+1. **7 Golden Missions (G1–G7)** cobrindo todos os modos + casos negativos.
+2. **`GoldenRunner`** com dispatcher injetável; persistência isolada.
+3. **Marker `@pytest.mark.golden`** + `--run-golden`.
+4. **Polimento CLI:** `friendly_error`, `summary_panel`, exit codes 0/1.
+5. **Checagem de ambiente** (`environment_warnings`).
+6. **Padrão de artefatos** fixo por modo.
+
+---
+
+# 🎉 Release Notes — FounderAI v5.0.0 GA
+
+**Data:** 27/09/2026 · **Status:** GA (congelada — ver ADR-017)
+
+Transição de "conjunto de agentes" para **Sistema Operacional de Projetos**.
+Evolução completa v1.0→v5.0 e métricas em `docs/RELEASE_NOTES_v5.0.md`.
+
+---
+
+# ADR-017 — GA Release Freeze (v5.0.0)
+
+* **Data:** 27/09/2026 · **Status:** APROVADO (congelamento em vigor)
+
+## Decisão
+1. Congela na tag `v5.0.0`: CLI, schemas públicos, layout de artefatos,
+   contratos de pipeline, pack das 7 Golden Missions.
+2. Pós-freeze sem novo ADR: bugfixes que não alterem contratos, mensagens, prompts.
+3. Exige novo ADR: mudança de contrato, flags, layout, Golden Mission, thresholds.
+4. Critérios de saída: suíte verde; `--run-golden` 7/7; `self-audit` nunca CRITICAL.
+5. Rollback: reverter para tag `v5.0.0`.
+
+---
+
+# ADR-018 — Interaction Layer: REST + WebSocket (v5.1.0)
+
+* **Data:** 02/10/2026 · **Status:** APROVADO
+
+## Decisão
+1. **FastAPI** como camada de interação (núcleo v5.0 intacto).
+2. **`InteractionRequest` unificado** (source + mode + prompt + options).
+3. **`MissionEngine`** dispatcher de alto nível com eventos/`astream()`.
+4. **REST:** `/health`, `/api/v1/interact`, `/missions/{id}`, `/artifacts/{id}/{file}`.
+5. **WebSocket:** `/ws/v1/missions/{id}/stream` com eventos JSON tipados.
+6. **`ConnectionManager`** por mission_id (broadcast tolerante a quedas).
+7. **Segurança:** `_safe_segment` rejeita `..` com 400.
+8. **UI Streamlit** consumindo REST + WS.
+
+---
+
+# ADR-019 — External Evidence & Evidence Graph (v5.2.0)
+
+* **Data:** 02/10/2026 · **Status:** APROVADO
+
+## Decisão
+1. **Domínio:** `Source`, `EvidenceItem`, `Claim`, `EvidenceGraph`.
+   Regra rígida: nunca inventar URL/fonte.
+2. **Provedores:** Protocol `SearchProvider` + `MockSearchProvider` +
+   `HttpSearchProvider`.
+3. **`EvidenceService`:** plan_queries → search (FAIL_OPEN) → to_evidence →
+   bind_claims → build_graph.
+4. **Integração:** DISCOVER (`evidence_level`) e VALIDATE ("Evidence vs Opinion").
+5. **CLI/API:** `--no-evidence`; `evidence_summary` na API.
+
+---
+
+# ADR-020 — Evidence Hardening: Real Providers, Caching & Deduplication (v5.2.1)
+
+* **Data:** 03/10/2026 · **Status:** APROVADO
+
+## Decisão
+1. **Provedores reais (1/3):** `TavilySearchProvider` + `SerperSearchProvider`;
+   `get_search_provider(name)` com fallback seguro para Mock sem key.
+2. **Cache (2/3):** `FileEvidenceCache` em `artifacts/.evidence_cache/`, chave
+   SHA256(provider+normalized_query), TTL 24h, fail-open; flags
+   `EVIDENCE_CACHE_ENABLED/TTL_SECONDS/BYPASS`.
+3. **Dedup (2/3):** sources por URL canônica (fallback title+publisher);
+   evidence por hash(quote+source_id); claims por texto normalizado;
+   `score_relevance` (Jaccard) com penalty p/ snippets <15 chars.
+4. **Observabilidade (3/3):** `metrics` (provider_used, cache_hits/misses,
+   deduped_*) persistidas no `evidence_graph.json` e expostas na API.
+5. **CLI (3/3):** `--evidence-provider {mock,tavily,serper,http}`.
+
+### Alternativas rejeitadas
+Redis/SQLite p/ cache; embeddings p/ relevância (adiado p/ v5.3).
+
+---
+
+*Fim do arquivo único de governança. Novas ADRs são anexadas ao final.*

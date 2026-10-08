@@ -1,0 +1,30 @@
+{
+  "provider": "serper",
+  "query": "tendências de mercado Tema",
+  "normalized_query": "tendencias de mercado tema",
+  "results": [
+    {
+      "title": "Mock result 1 for 'tendências de mercado Tema'",
+      "snippet": "Deterministic snippet 1 (digest prefix: 16240b83).",
+      "url": "https://mock.example/16240b83/1",
+      "publisher": "mock-publisher",
+      "score": 1.0
+    },
+    {
+      "title": "Mock result 2 for 'tendências de mercado Tema'",
+      "snippet": "Deterministic snippet 2 (digest prefix: 16240b83).",
+      "url": "https://mock.example/16240b83/2",
+      "publisher": "mock-publisher",
+      "score": 0.9
+    },
+    {
+      "title": "Mock result 3 for 'tendências de mercado Tema'",
+      "snippet": "Deterministic snippet 3 (digest prefix: 16240b83).",
+      "url": "https://mock.example/16240b83/3",
+      "publisher": "mock-publisher",
+      "score": 0.8
+    }
+  ],
+  "stored_at": "2026-10-08T09:37:14.817854+00:00",
+  "ttl_seconds": 86400
+}

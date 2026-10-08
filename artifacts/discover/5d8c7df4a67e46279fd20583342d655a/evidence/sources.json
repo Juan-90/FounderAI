@@ -1,0 +1,50 @@
+[
+  {
+    "source_id": "src-e99fc14ec370",
+    "title": "Mock result 1 for 'Tema para Não informado em Brasil'",
+    "url": "https://mock.example/88ff8bcb/1",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-08T09:37:14.819777Z",
+    "raw_snippet": "Deterministic snippet 1 (digest prefix: 88ff8bcb)."
+  },
+  {
+    "source_id": "src-41668d6c54c3",
+    "title": "Mock result 2 for 'Tema para Não informado em Brasil'",
+    "url": "https://mock.example/88ff8bcb/2",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-08T09:37:14.819777Z",
+    "raw_snippet": "Deterministic snippet 2 (digest prefix: 88ff8bcb)."
+  },
+  {
+    "source_id": "src-f31c674224e4",
+    "title": "Mock result 3 for 'Tema para Não informado em Brasil'",
+    "url": "https://mock.example/88ff8bcb/3",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-08T09:37:14.819777Z",
+    "raw_snippet": "Deterministic snippet 3 (digest prefix: 88ff8bcb)."
+  },
+  {
+    "source_id": "src-e3a284154019",
+    "title": "Mock result 1 for 'tendências de mercado Tema'",
+    "url": "https://mock.example/16240b83/1",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-08T09:37:14.819777Z",
+    "raw_snippet": "Deterministic snippet 1 (digest prefix: 16240b83)."
+  },
+  {
+    "source_id": "src-1fe37aa9bc14",
+    "title": "Mock result 2 for 'tendências de mercado Tema'",
+    "url": "https://mock.example/16240b83/2",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-08T09:37:14.819777Z",
+    "raw_snippet": "Deterministic snippet 2 (digest prefix: 16240b83)."
+  },
+  {
+    "source_id": "src-a68adecd2a0c",
+    "title": "Mock result 3 for 'tendências de mercado Tema'",
+    "url": "https://mock.example/16240b83/3",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-08T09:37:14.819777Z",
+    "raw_snippet": "Deterministic snippet 3 (digest prefix: 16240b83)."
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "claim_id": "cl-1",
+    "text": "A cloud platform that turns satellite, drone, and IoT data into actionable insights for Brazilian farms",
+    "origin": "model_opinion",
+    "confidence": 0.5,
+    "evidence_ids": [],
+    "used_in_decision": false
+  },
+  {
+    "claim_id": "cl-2",
+    "text": "An AI‑driven microlearning platform that delivers bite‑size, adaptive courses to mid‑career professionals",
+    "origin": "model_opinion",
+    "confidence": 0.5,
+    "evidence_ids": [],
+    "used_in_decision": false
+  },
+  {
+    "claim_id": "cl-3",
+    "text": "A tele‑pharmacy network that delivers prescriptions to rural homes via micro‑fulfillment hubs",
+    "origin": "model_opinion",
+    "confidence": 0.5,
+    "evidence_ids": [],
+    "used_in_decision": false
+  },
+  {
+    "claim_id": "cl-4",
+    "text": "Biodegradable packaging made from cassava peels that replaces conventional plastics in the food sector",
+    "origin": "model_opinion",
+    "confidence": 0.5,
+    "evidence_ids": [],
+    "used_in_decision": false
+  }
+]

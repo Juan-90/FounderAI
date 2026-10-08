@@ -119,6 +119,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-evidence", action="store_true", dest="no_evidence",
                         help="VALIDATE/DISCOVER: desabilita busca externa (apenas opinião do modelo).")
 
+    parser.add_argument("--evidence-provider", default=None, dest="evidence_provider",
+                        choices=["mock", "tavily", "serper", "http"],
+                        help="VALIDATE/DISCOVER: provedor de busca de evidências.")
+
     # Histórico / reexecução
     parser.add_argument("--history", action="store_true", help="Exibir histórico de deliberações.")
     parser.add_argument("-n", type=int, default=5, dest="history_limit", metavar="N",
@@ -588,7 +592,7 @@ async def main() -> None:
         
         evidence_svc = None
         if not args.no_evidence:
-            evidence_svc = EvidenceService()  # usa config default
+            evidence_svc = EvidenceService(provider_name=args.evidence_provider)
         
         code = await run_validate_mode(
             args.build_intent or "", 
@@ -629,7 +633,7 @@ async def main() -> None:
         
         evidence_svc = None
         if not args.no_evidence:
-            evidence_svc = EvidenceService()  # usa config default
+            evidence_svc = EvidenceService(provider_name=args.evidence_provider)
         
         code = await run_discover_mode(
             args.build_intent or "",

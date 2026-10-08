@@ -1,0 +1,11 @@
+{
+  "theme": "Tema",
+  "audience": "Não informado",
+  "geography": "Brasil",
+  "constraints": [],
+  "attractiveness_criteria": [
+    "Potencial de mercado",
+    "Inovação",
+    "Escalabilidade"
+  ]
+}
