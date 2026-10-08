@@ -84,12 +84,15 @@ def record_validate_completion(
             memory.project_id, ArtifactKind.VALIDATION_REPORT, str(report),
             mission_id=state.mission_id,
         )
-    risks = state.mode_payload.get("contrarian_risk", {}) or {}
+    # CORREÇÃO: chave real é "risks_contrarian" (com "s"), não "contrarian_risk"
+    risks = state.mode_payload.get("risks_contrarian", {}) or {}
     for r in (risks.get("reasons_to_kill") or [])[:3]:
         store.add_learning(memory.project_id, str(r), "validation_risk",
                            mission_id=state.mission_id)
-    gaps = state.mode_payload.get("evidence_gaps", {}) or {}
-    for g in (gaps.get("gaps") or [])[:3]:
+    gaps = state.mode_payload.get("evidence_gaps", []) or []
+    if isinstance(gaps, dict):
+        gaps = gaps.get("gaps", []) or []
+    for g in gaps[:3]:
         store.add_learning(memory.project_id, str(g), "validation_risk",
                            mission_id=state.mission_id)
     ev = mission_dir / "evidence" / "evidence_graph.json"

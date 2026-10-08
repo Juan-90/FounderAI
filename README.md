@@ -134,6 +134,34 @@ Cada missão com evidência grava `evidence_graph.json` com métricas:
 
 ---
 
+## 🧠 Memória de Projeto (v5.3.0)
+
+Cada projeto acumula **eventos, decisões, aprendizados e versões de artefatos**
+entre missões. Um BUILD posterior herda automaticamente as decisões e os riscos
+descobertos num VALIDATE anterior (injetados no contexto dos agentes).
+
+### Vincular missões a um projeto
+
+```bash
+python main.py validate "Validar EcoTrack-IA" --project <project_id>
+python main.py build "Construir MVP EcoTrack" --project <project_id>
+python main.py validate-and-build "Ideia" --project <project_id>
+
+python main.py project list                 # todos os projetos
+python main.py project show <id>            # goal + decisões + aprendizados
+python main.py project timeline <id>        # linha do tempo de eventos
+python main.py project artifacts <id>       # versões de artefatos arquivadas
+
+python main.py project list                 # todos os projetos
+python main.py project show <id>            # goal + decisões + aprendizados
+python main.py project timeline <id>        # linha do tempo de eventos
+python main.py project artifacts <id>       # versões de artefatos arquivadas
+
+GET /api/v1/projects                      # lista
+GET /api/v1/projects/{id}                 # resumo completo
+GET /api/v1/projects/{id}/timeline        # eventos
+GET /api/v1/projects/{id}/artifacts       # versões
+
 ## 🗂 Artefatos & Governança
 
 - **Artefatos:** `artifacts/<modo>/<mission_id>/` (+ subpasta `evidence/` quando aplicável).
@@ -167,6 +195,16 @@ pytest -q --run-golden        # inclui a bateria Golden Missions real
 
 - **v5.2.1 (atual)** — Evidence Hardening: Tavily/Serper, cache, dedup, métricas, ADR-020.
 - **v5.3.0** — UI de evidências (visualização do grafo) + auto-refinamento + embeddings/RAG.
+- **v6.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
+
+
+**B)** Roadmap atualizado:
+
+```markdown
+- **v5.3.0 (atual — GA)** — Project Memory & Versioning Loop: memória de projeto,
+  context compiler, hooks nos pipelines, CLI `project`, API REST de projetos.
+- **v5.4.0** — IMPROVE Mode & Auto-refinement: learnings alimentam re-builds
+  automáticos; UI web de timeline; backend de memória plugável (sqlite/redis).
 - **v6.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
 
 ---

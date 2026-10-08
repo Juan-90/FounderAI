@@ -287,4 +287,52 @@ Redis/SQLite p/ cache; embeddings p/ relevância (adiado p/ v5.3).
 
 ---
 
+# ADR-021 — Project Memory & Versioning Loop (v5.3.0)
+
+* **Data:** 09/10/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+Até a v5.2.1 cada missão era isolada: um BUILD não sabia das decisões de um
+VALIDATE anterior, e falhas de QA não alimentavam as próximas tentativas.
+Faltava **continuidade** — memória de projeto que acumula eventos, decisões,
+aprendizados e versões de artefatos ao longo de múltiplas missões.
+
+## Decisão
+1. **Domínio (1/4):** `ProjectMemory` (agregado raiz) + `MemoryEvent`,
+   `MemoryDecision`, `MemoryLearning`, `ArtifactVersion`; enums
+   `MemoryEventType` (10) e `ArtifactKind` (9).
+2. **Store (1/4):** `DiskProjectMemoryStore` em
+   `artifacts/projects/<project_id>/memory.json` com **gravação atômica**
+   (temp + `os.replace`) anti-corrupção; checksum SHA256 por versão de artefato.
+3. **Context Compiler (2/4):** `MemoryContextCompiler.compile()` resume a
+   memória com prioridade determinística (goal → decisões → learnings →
+   artefatos-chave → falhas) e truncamento por budget
+   (`PROJECT_MEMORY_CONTEXT_MAX_CHARS=8000`).
+4. **Hooks (2/4):** injeção do bloco compilado no intent/idea_text (base de
+   todos os prompts) + gravadores `record_validate_completion` /
+   `record_build_completion` / `record_vab_completion`, todos **fail-open**.
+5. **CLI & API (3/4):** subcomando `project {list,show,timeline,artifacts}`;
+   flag `--project <ID>` em build/validate/vab; endpoints
+   `/api/v1/projects[/{id}[/timeline|/artifacts]]`; `InteractionRequest`
+   aceita `project_id`/`project_name`.
+6. **Config:** `PROJECT_MEMORY_ENABLED`, `PROJECT_MEMORY_BACKEND` (reservado),
+   `PROJECT_MEMORY_DIR`, `PROJECT_MEMORY_CONTEXT_MAX_CHARS`.
+
+## Consequências
+- Positivas: continuidade real entre missões (BUILD herda decisões do VALIDATE);
+  trilha de auditoria por projeto; falhas viram aprendizados reutilizáveis;
+  memória nunca quebra a missão (fail-open + gravação atômica).
+- Negativas: contexto extra consome tokens do prompt (mitigado pelo budget);
+  apenas backend disk por ora.
+
+## Alternativas rejeitadas
+- RAG/vector DB para memória (complexidade prematura; adiado p/ v5.4).
+- Memória em SQLite/Redis agora (disk+JSON é auditável e suficiente).
+
+## Fora de escopo (v5.3.0)
+- IMPROVE Mode / auto-refinamento a partir de learnings (v5.4.0).
+- UI web de timeline de projeto.
+
 *Fim do arquivo único de governança. Novas ADRs são anexadas ao final.*

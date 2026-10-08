@@ -126,6 +126,7 @@ class Settings(BaseSettings):
 
     # ── v5.3.0 — Project Memory ──
     PROJECT_MEMORY_ENABLED: bool = True
+    PROJECT_MEMORY_BACKEND: str = "disk"   # reservado (futuro: sqlite/redis)
     PROJECT_MEMORY_CONTEXT_MAX_CHARS: int = 8000
     PROJECT_MEMORY_DIR: str = "artifacts/projects"
     
