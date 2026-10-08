@@ -1,25 +1,8 @@
 """
-Fundador IA v5.0.0 GA — CLI Principal.
+Fundador IA v5.3.0 — CLI Principal.
 
-Modos:
-  • (default)           Deliberação multi-turno do Conselho (Turno 0 + Turno 1)
-  • build               Modo BUILD (Web/Game)             [v4.2/v4.3]
-  • validate            Modo VALIDATE                     [v4.4]
-  • validate-and-build  Ponte Direta                      [v4.5]
-  • self-audit          Auditoria Interna                 [v4.6]
-  • discover            Mapeamento de Oportunidades       [v4.7]
-  • golden-missions     Regressão GA (7 missões)          [v5.0]
-
-Uso:
-    python main.py                              Menu interativo
-    python main.py "Missão" [-f arq]            Deliberação direta
-    python main.py build "Intent" [--type GAME] [--project-name NOME]
-    python main.py validate "Intent" [-f arq]
-    python main.py validate-and-build "Intent" [--no-build|--auto-build|--no-confirm]
-    python main.py self-audit [--no-build|--no-validate|--no-vab|--max-per-mode N]
-    python main.py discover "Tema" [--max N] [--handoff OPP_ID]
-    python main.py golden-missions
-    python main.py --last / --rerun ID / --history [-n N]
+Modos: council (default), build, validate, validate-and-build, self-audit,
+discover, golden-missions, project (v5.3).
 """
 
 from __future__ import annotations
@@ -43,92 +26,60 @@ console = Console()
 _CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 
 
-# ─────────────────────────────────────────
-# Parser
-# ─────────────────────────────────────────
-
 class _RichHelpFormatter(argparse.HelpFormatter):
     def format_help(self) -> str:
         return (
-            "\n  🏛  Fundador IA v5.0.0 GA — Conselho Consultivo Artificial\n"
+            "\n  🏛  Fundador IA v5.3.0 — AI Project Operating System\n"
             "  ─────────────────────────────────────────────────────\n\n"
             + super().format_help()
             + "\n  Exemplos:\n"
             "    python main.py \"Criar app de finanças para MEIs\"\n"
-            "    python main.py build \"Quero um sistema de agendamento para minha barbearia\"\n"
-            "    python main.py build \"Jogo 2D de nave vs asteroides\" --type GAME\n"
-            "    python main.py validate \"Quero validar o EcoTrack-IA...\" -f research.md\n"
-            "    python main.py validate-and-build \"Validar EcoTrack-IA e construir MVP\"\n"
-            "    python main.py self-audit --max-per-mode 2\n"
-            "    python main.py discover \"Oportunidades de software para barbearias no Brasil\" --max 6\n"
-            "    python main.py golden-missions\n"
-            "    python main.py --last\n"
-            "    python main.py --history -n 10\n"
+            "    python main.py build \"Sistema de agendamento\" --project <id>\n"
+            "    python main.py validate \"Ideia\" --project <id>\n"
+            "    python main.py project list\n"
+            "    python main.py project show <id>\n"
+            "    python main.py project timeline <id>\n"
+            "    python main.py project artifacts <id>\n"
         )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python main.py",
-        description="Avalia, descobre, valida, constrói, audita e regressa missões de produto via IA.",
+        description="Avalia, descobre, valida, constrói, audita e regressa missões.",
         formatter_class=_RichHelpFormatter,
-        add_help=True,
     )
     parser.add_argument("mission", nargs="?", default=None,
-                        help="'build' | 'validate' | 'validate-and-build' | 'self-audit' | "
-                             "'discover' | 'golden-missions' | ou o texto da missão de deliberação.")
+                        help="'build'|'validate'|'validate-and-build'|'self-audit'|"
+                             "'discover'|'golden-missions'|'project'| ou texto da missão.")
     parser.add_argument("build_intent", nargs="?", default=None,
-                        help="Intent/tema do projeto (usar com build/validate/.../discover).")
+                        help="Intent/tema (build/validate/.../discover) ou action do project.")
+    parser.add_argument("project_target", nargs="?", default=None,
+                        help="PROJECT: id do projeto p/ show/timeline/artifacts.")
 
-    # Contexto compartilhado
     parser.add_argument("-f", "--file", action="append", dest="files", default=[],
                         metavar="ARQUIVO", help="Arquivo de contexto (repetível).")
-
-    # BUILD
     parser.add_argument("--project-name", default=None, dest="project_name",
-                        metavar="NOME", help="BUILD: nome do projeto (default: inferido).")
+                        metavar="NOME", help="BUILD: nome do projeto.")
     parser.add_argument("--type", default=None, dest="project_type",
-                        choices=["WEB_APP", "INTERNAL_SYSTEM", "GAME"],
-                        metavar="TIPO", help="BUILD: tipo de projeto.")
-
-    # VALIDATE_AND_BUILD
-    parser.add_argument("--auto-build", action="store_true", dest="auto_build",
-                        help="VAB: libera build sem confirmação humana.")
-    parser.add_argument("--no-confirm", action="store_true", dest="no_confirm",
-                        help="VAB: não pergunta; se exigir humano, aguarda (WAITING_HUMAN).")
-
-    # BUILD / SELF-AUDIT (compartilhada)
-    parser.add_argument("--no-build", action="store_true", dest="no_build",
-                        help="VAB: apenas valida. SELF-AUDIT: exclui missões BUILD.")
-
-    # SELF-AUDIT
-    parser.add_argument("--no-validate", action="store_true", dest="no_validate",
-                        help="SELF-AUDIT: exclui missões VALIDATE.")
-    parser.add_argument("--no-vab", action="store_true", dest="no_vab",
-                        help="SELF-AUDIT: exclui missões VALIDATE_AND_BUILD.")
-    parser.add_argument("--max-per-mode", type=int, default=3, dest="max_per_mode",
-                        metavar="N", help="SELF-AUDIT: máx. de missões por modo.")
-
-    # DISCOVER
-    parser.add_argument("--max", type=int, default=8, dest="max_opportunities",
-                        metavar="N", help="DISCOVER: máx. de oportunidades no resultado.")
-    parser.add_argument("--handoff", default=None, dest="handoff_id", metavar="OPP_ID",
-                        help="DISCOVER: envia a oportunidade selecionada ao VALIDATE.")
-
-    # VALIDATE / DISCOVER
-    parser.add_argument("--no-evidence", action="store_true", dest="no_evidence",
-                        help="VALIDATE/DISCOVER: desabilita busca externa (apenas opinião do modelo).")
-
+                        choices=["WEB_APP", "INTERNAL_SYSTEM", "GAME"], metavar="TIPO")
+    parser.add_argument("--project", default=None, dest="project_id", metavar="ID",
+                        help="Vincula a missão à memória do projeto (v5.3).")
+    parser.add_argument("--auto-build", action="store_true", dest="auto_build")
+    parser.add_argument("--no-confirm", action="store_true", dest="no_confirm")
+    parser.add_argument("--no-build", action="store_true", dest="no_build")
+    parser.add_argument("--no-validate", action="store_true", dest="no_validate")
+    parser.add_argument("--no-vab", action="store_true", dest="no_vab")
+    parser.add_argument("--max-per-mode", type=int, default=3, dest="max_per_mode")
+    parser.add_argument("--max", type=int, default=8, dest="max_opportunities")
+    parser.add_argument("--handoff", default=None, dest="handoff_id")
+    parser.add_argument("--no-evidence", action="store_true", dest="no_evidence")
     parser.add_argument("--evidence-provider", default=None, dest="evidence_provider",
-                        choices=["mock", "tavily", "serper", "http"],
-                        help="VALIDATE/DISCOVER: provedor de busca de evidências.")
-
-    # Histórico / reexecução
-    parser.add_argument("--history", action="store_true", help="Exibir histórico de deliberações.")
-    parser.add_argument("-n", type=int, default=5, dest="history_limit", metavar="N",
-                        help="Entradas no histórico (padrão: 5).")
-    parser.add_argument("--last", action="store_true", help="Reexecutar última deliberação.")
-    parser.add_argument("--rerun", metavar="ID", help="Reexecutar deliberação por ID.")
+                        choices=["mock", "tavily", "serper", "http"])
+    parser.add_argument("--history", action="store_true")
+    parser.add_argument("-n", type=int, default=5, dest="history_limit")
+    parser.add_argument("--last", action="store_true")
+    parser.add_argument("--rerun", metavar="ID")
     return parser
 
 
@@ -140,57 +91,42 @@ def _parse_args() -> argparse.Namespace:
     return args
 
 
-# ─────────────────────────────────────────
-# Menu interativo
-# ─────────────────────────────────────────
-
 def _interactive_menu() -> argparse.Namespace:
     ns = argparse.Namespace(
-        mission=None, build_intent=None, files=[], history=False,
-        history_limit=5, last=False, rerun=None,
-        project_name=None, project_type=None,
-        no_build=False, auto_build=False, no_confirm=False,
-        no_validate=False, no_vab=False, max_per_mode=3,
-        max_opportunities=8, handoff_id=None,
+        mission=None, build_intent=None, project_target=None, files=[], history=False,
+        history_limit=5, last=False, rerun=None, project_name=None, project_type=None,
+        project_id=None, no_build=False, auto_build=False, no_confirm=False,
+        no_validate=False, no_vab=False, max_per_mode=3, max_opportunities=8,
+        handoff_id=None, no_evidence=False, evidence_provider=None,
     )
     console.print()
-    console.print(
-        Panel(
-            "[bold cyan]Fundador IA v5.0.0 GA[/bold cyan] — Conselho Consultivo Artificial\n\n"
-            "  [bold][1][/bold]  Nova Missão (deliberação)\n"
-            "  [bold][2][/bold]  Reexecutar Última Deliberação\n"
-            "  [bold][3][/bold]  Ver Histórico de Decisões\n"
-            "  [bold][4][/bold]  Sair",
-            title="[bold cyan]🏛  Menu Principal[/bold cyan]",
-            border_style="cyan", padding=(1, 3),
-        )
-    )
-    choice = console.input("\n[bold]Escolha uma opção:[/bold] ").strip()
-
+    console.print(Panel(
+        "[bold cyan]Fundador IA v5.3.0[/bold cyan] — AI Project Operating System\n\n"
+        "  [bold][1][/bold]  Nova Missão (deliberação)\n"
+        "  [bold][2][/bold]  Reexecutar Última\n"
+        "  [bold][3][/bold]  Ver Histórico\n"
+        "  [bold][4][/bold]  Sair",
+        title="[bold cyan]🏛  Menu Principal[/bold cyan]", border_style="cyan", padding=(1, 3),
+    ))
+    choice = console.input("\n[bold]Escolha:[/bold] ").strip()
     if choice == "1":
         ns.mission = console.input("\n[bold]📋 Missão:[/bold] ").strip()
         if not ns.mission:
             _exit_error("Missão não pode ser vazia.")
-        file_input = console.input(
-            "[dim]📁 Arquivos de contexto (separados por vírgula ou Enter para pular):[/dim] "
-        ).strip()
-        if file_input:
-            ns.files = [f.strip() for f in file_input.split(",") if f.strip()]
+        fi = console.input("[dim] Arquivos (vírgula ou Enter):[/dim] ").strip()
+        if fi:
+            ns.files = [f.strip() for f in fi.split(",") if f.strip()]
     elif choice == "2":
         ns.last = True
     elif choice == "3":
         ns.history = True
     elif choice == "4":
-        console.print("\n[dim]Encerrando. Até logo![/dim]\n")
+        console.print("\n[dim]Encerrando.[/dim]\n")
         sys.exit(0)
     else:
-        _exit_error(f"Opção inválida: '{choice}'. Escolha entre 1 e 4.")
+        _exit_error(f"Opção inválida: '{choice}'.")
     return ns
 
-
-# ─────────────────────────────────────────
-# Utilitários de saída
-# ─────────────────────────────────────────
 
 def _exit_error(message: str, exception: Exception | None = None) -> None:
     detail = str(exception) if exception else ""
@@ -213,49 +149,38 @@ def _print_info(message: str) -> None:
     console.print(f"  [dim]{message}[/dim]")
 
 
-# ─────────────────────────────────────────
-# Reexecução
-# ─────────────────────────────────────────
-
-def _load_for_rerun(use_last: bool, rerun_id: str | None, override_files: list[str]) -> tuple[str, list[str]]:
+def _load_for_rerun(use_last: bool, rerun_id: str | None, override_files: list[str]):
     try:
         from backend.core.history import get_decision_by_id, get_last_decision
     except Exception as e:
-        _exit_error("Falha ao carregar módulo de histórico.", e)
-
-    entry: dict | None = None
+        _exit_error("Falha ao carregar histórico.", e)
+    entry = None
     if use_last:
         try:
             entry = get_last_decision()
         except Exception as e:
-            _exit_error("Falha ao ler o histórico de deliberações.", e)
+            _exit_error("Falha ao ler histórico.", e)
         if not entry:
-            _exit_error('Nenhuma deliberação anterior encontrada.\nExecute: python main.py "sua missão"')
+            _exit_error('Nenhuma deliberação anterior. Use: python main.py "missão"')
     elif rerun_id:
         try:
             entry = get_decision_by_id(rerun_id)
         except Exception as e:
-            _exit_error("Falha ao buscar deliberação no histórico.", e)
+            _exit_error("Falha ao buscar deliberação.", e)
         if not entry:
-            _exit_error(f"Deliberação com ID [bold]{rerun_id}[/bold] não encontrada.")
-
+            _exit_error(f"Deliberação {rerun_id} não encontrada.")
     assert entry is not None
-    mission: str = entry["mission"]
-    files: list[str] = override_files if override_files else (entry.get("context_files") or [])
-
+    mission = entry["mission"]
+    files = override_files if override_files else (entry.get("context_files") or [])
     console.print()
     console.print(Panel(
         f"[dim]ID original:[/dim] [bold]{entry['id']}[/bold]\n[dim]Data:[/dim] {entry['timestamp']}",
-        title="[bold cyan]🔄 Reexecutando Deliberação[/bold cyan]", border_style="cyan", padding=(0, 2),
+        title="[bold cyan]🔄 Reexecutando[/bold cyan]", border_style="cyan", padding=(0, 2),
     ))
     return mission, files
 
 
-# ─────────────────────────────────────────
-# Contexto com resumo (Fase 3)
-# ─────────────────────────────────────────
-
-def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
+def _prepare_context(file_paths: list[str]):
     if not file_paths:
         return "", []
     from backend.tools.file_tools import _PROJECT_ROOT, prepare_context_payload
@@ -263,51 +188,37 @@ def _prepare_context(file_paths: list[str]) -> tuple[str, list[str]]:
     try:
         payload = prepare_context_payload(file_paths)
     except Exception as e:
-        _exit_error("Falha ao preparar contexto de arquivos.", e)
-
+        _exit_error("Falha ao preparar contexto.", e)
     console.print()
-    console.print(
-        f"[dim]📁 Contexto:[/dim] {len(payload.included_files)} arquivo(s) incluído(s), "
-        f"{len(payload.truncated_files)} truncado(s), {len(payload.omitted_files)} omitido(s)"
-    )
-    if payload.included_files:
-        console.print("[dim]📁 Contexto Anexado:[/dim]")
-        for f in payload.included_files:
-            try:
-                size_kb = (project_root / f).stat().st_size / 1024
-                size_str = f"{size_kb:.1f} KB"
-            except OSError:
-                size_str = "? KB"
-            flag = " [bold yellow](truncado)[/bold yellow]" if f in payload.truncated_files else ""
-            console.print(f"   [green]📄[/green] {Path(f).name} [dim]({size_str})[/dim]{flag}")
+    console.print(f"[dim]📁 Contexto:[/dim] {len(payload.included_files)} incluído(s), "
+                  f"{len(payload.truncated_files)} truncado(s), {len(payload.omitted_files)} omitido(s)")
+    for f in payload.included_files:
+        try:
+            size_kb = (project_root / f).stat().st_size / 1024
+            size_str = f"{size_kb:.1f} KB"
+        except OSError:
+            size_str = "? KB"
+        flag = " [bold yellow](truncado)[/bold yellow]" if f in payload.truncated_files else ""
+        console.print(f"   [green]📄[/green] {Path(f).name} [dim]({size_str})[/dim]{flag}")
     for f in payload.omitted_files:
-        _print_warning(f"{Path(f).name} omitido — limite de contexto atingido.")
+        _print_warning(f"{Path(f).name} omitido — limite de contexto.")
     for w in payload.warnings:
         _print_warning(w)
-    if payload.included_files or payload.omitted_files:
-        console.print()
+    console.print()
     return payload.block, payload.included_files
 
-
-# ─────────────────────────────────────────
-# Histórico
-# ─────────────────────────────────────────
 
 def _show_history(limit: int) -> None:
     try:
         from backend.core.history import get_recent_decisions
         decisions = get_recent_decisions(limit)
     except Exception as e:
-        _exit_error("Falha ao ler o histórico de deliberações.", e)
-
+        _exit_error("Falha ao ler histórico.", e)
     if not decisions:
         console.print()
-        console.print(Panel(
-            '[dim]Nenhuma deliberação encontrada.\nExecute [bold]python main.py "sua missão"[/bold] para começar.[/dim]',
-            title="[bold cyan]📋 Histórico de Deliberações[/bold cyan]", border_style="cyan", padding=(1, 2),
-        ))
+        console.print(Panel('[dim]Nenhuma deliberação.[/dim]',
+                            title="[bold cyan]📋 Histórico[/bold cyan]", border_style="cyan", padding=(1, 2)))
         return
-
     table = Table(title=f"Últimas {len(decisions)} Deliberações", show_header=True,
                   header_style="bold cyan", border_style="dim", padding=(0, 1))
     table.add_column("Data/Hora", min_width=18, style="dim")
@@ -315,38 +226,25 @@ def _show_history(limit: int) -> None:
     table.add_column("Missão", min_width=34)
     table.add_column("Score", justify="center", min_width=7)
     table.add_column("Veredito", justify="center", min_width=12)
-    table.add_column("Contexto", min_width=14, style="dim")
-
     for d in decisions:
-        mission_short = d["mission"][:55] + ("…" if len(d["mission"]) > 55 else "")
+        ms = d["mission"][:55] + ("…" if len(d["mission"]) > 55 else "")
         score = d["average_score"]
-        score_style = "green" if score >= 7.5 else "yellow" if score >= 6.0 else "red"
-        verdict_str = "[green]✅ APPROVED[/green]" if d["final_verdict"] == "APPROVED" else "[red]❌ REJECTED[/red]"
-        files = d.get("context_files") or []
-        files_str = ", ".join(Path(f).name for f in files) if files else "—"
-        short_id = (d.get("id") or "")[:8] + "…"
-        table.add_row(d["timestamp"], short_id, mission_short,
-                      f"[{score_style}]{score:.2f}[/{score_style}]", verdict_str, files_str)
-
+        ss = "green" if score >= 7.5 else "yellow" if score >= 6.0 else "red"
+        vs = "[green]✅ APPROVED[/green]" if d["final_verdict"] == "APPROVED" else "[red]❌ REJECTED[/red]"
+        table.add_row(d["timestamp"], (d.get("id") or "")[:8] + "…", ms,
+                      f"[{ss}]{score:.2f}[/{ss}]", vs)
     console.print()
     console.print(table)
-    console.print("\n[dim]Dica: python main.py --rerun ID_COMPLETO para reexecutar.[/dim]\n")
+    console.print("\n[dim]Dica: python main.py --rerun ID_COMPLETO[/dim]\n")
 
-
-# ─────────────────────────────────────────
-# Renderização do Council
-# ─────────────────────────────────────────
 
 def _render_header(mission: str, included_files: list[str]) -> None:
-    context_info = (
-        f"\n\n[dim]Contexto:[/dim] {', '.join(Path(f).name for f in included_files)}"
-        if included_files else ""
-    )
+    ctx = f"\n\n[dim]Contexto:[/dim] {', '.join(Path(f).name for f in included_files)}" if included_files else ""
     console.print()
     console.print(Panel(
         f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
-        f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{context_info}",
-        title="[bold cyan]🏛  Fundador IA v5.0.0 GA[/bold cyan]", border_style="cyan", padding=(1, 2),
+        f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{ctx}",
+        title="[bold cyan]🏛  Fundador IA v5.3.0[/bold cyan]", border_style="cyan", padding=(1, 2),
     ))
     console.print()
 
@@ -366,8 +264,8 @@ def _observability_cell(r: JurorResponse) -> str:
     if r.provider_used == "fallback-safe":
         return "[red]fallback-safe[/red] (sem LLM)"
     if r.model_used:
-        short_model = r.model_used.split(":")[0].split("/")[-1]
-        base = f"{r.provider_used} ({short_model})"
+        short = r.model_used.split(":")[0].split("/")[-1]
+        base = f"{r.provider_used} ({short})"
     else:
         base = r.provider_used
     if r.fallback_triggered and r.original_provider:
@@ -376,12 +274,10 @@ def _observability_cell(r: JurorResponse) -> str:
 
 
 def _render_juror_row(r: JurorResponse) -> None:
-    score_style = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
-    verdict_icon = "✅" if r.verdict.value == "APPROVE" else "🚫"
-    console.print(
-        f"  [bold]{r.juror_name}[/bold] — Score: [{score_style}]{r.score:.1f}/10[/{score_style}] "
-        f"{verdict_icon} {r.verdict.value} [dim][{_observability_cell(r)}][/dim]"
-    )
+    ss = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
+    vi = "✅" if r.verdict.value == "APPROVE" else "🚫"
+    console.print(f"  [bold]{r.juror_name}[/bold] — Score: [{ss}]{r.score:.1f}/10[/{ss}] "
+                  f"{vi} {r.verdict.value} [dim][{_observability_cell(r)}][/dim]")
 
 
 def _render_jurors_table(responses: list[JurorResponse]) -> None:
@@ -392,26 +288,23 @@ def _render_jurors_table(responses: list[JurorResponse]) -> None:
     table.add_column("Provedor", min_width=26)
     table.add_column("Raciocínio", min_width=44)
     for r in responses:
-        score_style = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
-        verdict_str = "[green]✅ APPROVE[/green]" if r.verdict.value == "APPROVE" else "[red]🚫 VETO[/red]"
-        reasoning_short = r.reasoning[:80] + ("…" if len(r.reasoning) > 80 else "")
-        table.add_row(r.juror_name, f"[{score_style}]{r.score:.1f}/10[/{score_style}]",
-                      verdict_str, _observability_cell(r), reasoning_short)
+        ss = "green" if r.score >= 7.0 else "yellow" if r.score >= 5.0 else "red"
+        vs = "[green]✅ APPROVE[/green]" if r.verdict.value == "APPROVE" else "[red]🚫 VETO[/red]"
+        rs = r.reasoning[:80] + ("…" if len(r.reasoning) > 80 else "")
+        table.add_row(r.juror_name, f"[{ss}]{r.score:.1f}/10[/{ss}]", vs, _observability_cell(r), rs)
     console.print(table)
 
 
 def _render_clarification_recap(state: DeliberationState) -> None:
     if not state.clarification or not state.founder_response:
         return
-    questions = "\n".join(f"  ❓ {q}" for q in state.clarification.questions)
-    answer = state.founder_response
-    answer_short = answer if len(answer) <= 300 else answer[:297] + "..."
+    qs = "\n".join(f"  ❓ {q}" for q in state.clarification.questions)
+    a = state.founder_response
+    a = a if len(a) <= 300 else a[:297] + "..."
     console.print()
     console.print(Panel(
-        f"[bold]Perguntas do Turno 0:[/bold]\n{questions}\n\n"
-        f"[bold]Resposta do fundador (resumida):[/bold]\n[italic]{answer_short}[/italic]",
-        title="[bold yellow]💬 Histórico de Esclarecimento[/bold yellow]", border_style="yellow", padding=(1, 2),
-    ))
+        f"[bold]Perguntas do Turno 0:[/bold]\n{qs}\n\n[bold]Resposta (resumida):[/bold]\n[italic]{a}[/italic]",
+        title="[bold yellow]💬 Histórico de Esclarecimento[/bold yellow]", border_style="yellow", padding=(1, 2)))
 
 
 def _render_final_verdict(final_state: DeliberationState) -> None:
@@ -420,123 +313,98 @@ def _render_final_verdict(final_state: DeliberationState) -> None:
         return
     _render_clarification_recap(final_state)
     approved = decision.verdict == "APPROVED"
-    reason_line = f"\n[dim]Motivo: [/dim][italic]{decision.reason}[/italic]" if decision.reason else ""
+    reason = f"\n[dim]Motivo: [/dim][italic]{decision.reason}[/italic]" if decision.reason else ""
     console.print()
     console.print(Panel(
         f"{'✅' if approved else '❌'} Veredito Final: "
         f"{'[bold green]APPROVED[/bold green]' if approved else '[bold red]REJECTED[/bold red]'}\n"
-        f"[dim]Score Médio: [/dim][bold]{decision.average_score:.2f}/10.0[/bold]{reason_line}",
+        f"[dim]Score Médio: [/dim][bold]{decision.average_score:.2f}/10.0[/bold]{reason}",
         title="[bold]🎯 Decisão do Conselho[/bold]",
-        border_style="green" if approved else "red", padding=(1, 2),
-    ))
+        border_style="green" if approved else "red", padding=(1, 2)))
 
 
 def _render_clarification(state: DeliberationState) -> None:
-    clarification = state.clarification
-    if not clarification:
+    c = state.clarification
+    if not c:
         return
-    questions_text = "\n".join(f"  [bold]{i}.[/bold] {q}" for i, q in enumerate(clarification.questions, 1))
+    qt = "\n".join(f"  [bold]{i}.[/bold] {q}" for i, q in enumerate(c.questions, 1))
     console.print()
     console.print(Panel(
-        f"[dim]Motivo:[/dim] {clarification.reason}\n\n[bold]Perguntas para você:[/bold]\n{questions_text}\n\n"
-        f"[dim]Digite 'cancel', 'abort' ou '/cancel' para encerrar a deliberação.[/dim]",
-        title="[bold yellow]❓ Esclarecimentos Necessários[/bold yellow]", border_style="yellow", padding=(1, 2),
-    ))
+        f"[dim]Motivo:[/dim] {c.reason}\n\n[bold]Perguntas:[/bold]\n{qt}\n\n"
+        f"[dim]Digite 'cancel' para encerrar.[/dim]",
+        title="[bold yellow]❓ Esclarecimentos Necessários[/bold yellow]", border_style="yellow", padding=(1, 2)))
 
 
-# ─────────────────────────────────────────
-# Coleta de respostas dos jurados (LLM)
-# ─────────────────────────────────────────
-
-async def _collect_juror_responses(mission: str, context_block: str, turn_label: str, extra_context: str = "") -> list[JurorResponse]:
+async def _collect_juror_responses(mission: str, context_block: str, turn_label: str, extra_context: str = ""):
     from backend.agents.council import JURORS, _evaluate_juror
     from backend.core.llm_client import LLMProviderError
-
-    full_context = context_block
+    full = context_block
     if extra_context:
-        full_context = (
-            f"{context_block}\n\n--- CONTEXTO ADICIONAL (Resposta do Fundador) ---\n{extra_context}\n---"
-        )
-
-    responses: list[JurorResponse] = []
+        full = f"{context_block}\n\n--- CONTEXTO ADICIONAL ---\n{extra_context}\n---"
+    responses = []
     for juror in JURORS:
-        with console.status(f"[cyan]{turn_label} — Consultando [{juror['name']}]...[/cyan]", spinner="dots"):
+        with console.status(f"[cyan]{turn_label} — [{juror['name']}]...[/cyan]", spinner="dots"):
             try:
-                response = await _evaluate_juror(juror, mission, full_context)
+                response = await _evaluate_juror(juror, mission, full)
             except LLMProviderError as e:
                 _exit_error(f"Falha ao consultar [{juror['name']}].\n{e}")
             except RuntimeError as e:
                 _exit_error(str(e))
             except Exception as e:
-                _exit_error(f"Erro inesperado ao consultar [{juror['name']}].", exception=e)
+                _exit_error(f"Erro inesperado em [{juror['name']}].", exception=e)
         responses.append(response)
         _render_juror_row(response)
     return responses
 
 
-# ─────────────────────────────────────────
-# Fluxo de deliberação multi-turno
-# ─────────────────────────────────────────
-
 async def _run_deliberation(mission: str, context_block: str, included_files: list[str]) -> None:
     from backend.core.council import cancel_deliberation, process_founder_reply, process_turn0
     from backend.core.history import save_council_decision
-
     console.print(Rule("[bold cyan][TURNO 0 — ANÁLISE INICIAL][/bold cyan]", style="cyan"))
     console.print()
-    turn0_responses = await _collect_juror_responses(mission, context_block, "[TURNO 0]")
-    state = process_turn0(mission, turn0_responses)
-
+    t0 = await _collect_juror_responses(mission, context_block, "[TURNO 0]")
+    state = process_turn0(mission, t0)
     if state.status == "FINAL":
         console.print()
         console.print(Rule("[bold green][DELIBERAÇÃO CONCLUÍDA][/bold green]", style="green"))
-        _render_jurors_table(turn0_responses)
+        _render_jurors_table(t0)
         _render_final_verdict(state)
         _persist_decision(state, included_files, save_council_decision)
         return
-
     console.print(Rule("[bold yellow][AGUARDANDO ESCLARECIMENTO][/bold yellow]", style="yellow"))
     _render_clarification(state)
-
-    cancelled_by_keyboard = False
+    cancelled_kb = False
     try:
-        founder_reply = console.input("\n[bold yellow]📝 Sua resposta (ou /cancel para encerrar):[/bold yellow] ").strip()
+        reply = console.input("\n[bold yellow]📝 Sua resposta (ou /cancel):[/bold yellow] ").strip()
     except KeyboardInterrupt:
-        cancelled_by_keyboard = True
-        founder_reply = ""
+        cancelled_kb = True
+        reply = ""
         console.print()
-        _print_info("Ctrl+C detectado — encerrando deliberação...")
-
-    if cancelled_by_keyboard or not founder_reply or founder_reply.lower() in _CANCEL_TOKENS:
-        reason = (
-            "Fundador pressionou Ctrl+C." if cancelled_by_keyboard
-            else (founder_reply if founder_reply else "Fundador encerrou sem responder.")
-        )
+        _print_info("Ctrl+C detectado — encerrando...")
+    if cancelled_kb or not reply or reply.lower() in _CANCEL_TOKENS:
+        reason = ("Ctrl+C." if cancelled_kb else (reply if reply else "Encerrado sem responder."))
         cancelled = cancel_deliberation(state, reason=reason)
         console.print()
-        console.print(Panel("[dim]Deliberação encerrada pelo fundador.[/dim]",
+        console.print(Panel("[dim]Deliberação encerrada.[/dim]",
                             title="[bold dim]🚫 Cancelado[/bold dim]", border_style="dim", padding=(0, 2)))
         _print_info(f"Motivo: {cancelled.founder_response}")
-        _print_info(f"Status: {cancelled.status}")
         console.print()
         sys.exit(0)
-
     console.print()
     console.print(Rule("[bold cyan][TURNO 1 — DELIBERAÇÃO FINAL][/bold cyan]", style="cyan"))
     console.print()
-    turn1_responses = await _collect_juror_responses(mission, context_block, "[TURNO 1]", extra_context=founder_reply)
-    final_state = process_founder_reply(state, founder_reply, turn1_responses)
-
+    t1 = await _collect_juror_responses(mission, context_block, "[TURNO 1]", extra_context=reply)
+    final_state = process_founder_reply(state, reply, t1)
     console.print()
     console.print(Rule("[bold green][DELIBERAÇÃO CONCLUÍDA][/bold green]", style="green"))
     console.print()
     console.print("[bold dim]Avaliações — Turno 1[/bold dim]")
-    _render_jurors_table(turn1_responses)
+    _render_jurors_table(t1)
     _render_final_verdict(final_state)
     _persist_decision(final_state, included_files, save_council_decision)
 
 
-def _persist_decision(final_state: DeliberationState, included_files: list[str], save_fn: Callable[..., str]) -> None:
+def _persist_decision(final_state: DeliberationState, included_files: list[str], save_fn) -> None:
     from backend.schemas.council import CouncilDecision as CouncilSchemaDecision
     if not final_state.final_decision:
         return
@@ -549,22 +417,23 @@ def _persist_decision(final_state: DeliberationState, included_files: list[str],
     console.print()
     with console.status("[dim]Salvando decisão...[/dim]", spinner="dots"):
         try:
-            deliberation_id = save_fn(compatible, included_files)
+            did = save_fn(compatible, included_files)
         except Exception as e:
-            _print_warning(f"Falha ao salvar decisão: {e}")
+            _print_warning(f"Falha ao salvar: {e}")
             return
-    _print_success(f"Decisão registrada — ID: {deliberation_id}")
+    _print_success(f"Decisão registrada — ID: {did}")
     console.print()
 
 
-# ─────────────────────────────────────────
-# Entry point
-# ─────────────────────────────────────────
+def _project_pipeline_store():
+    from backend.core.config import settings as s
+    from backend.domain.memory_store import DiskProjectMemoryStore
+    return DiskProjectMemoryStore(base_dir=Path(s.PROJECT_MEMORY_DIR))
+
 
 async def main() -> None:
     args = _parse_args()
 
-    # ── Checagem de ambiente (v5.0.0) ──
     from backend.core.config import settings as _app_settings
     for w in _app_settings.environment_warnings():
         _print_warning(w)
@@ -573,98 +442,87 @@ async def main() -> None:
         _show_history(args.history_limit)
         sys.exit(0)
 
-    # ── Modo BUILD (v4.2/v4.3) ──
+    # ── PROJECT (v5.3.0) ──
+    if args.mission == "project":
+        from backend.cli import main as _project_cli
+        cli_args = [args.build_intent or "list"]
+        if args.project_target:
+            cli_args.append(args.project_target)
+        sys.exit(_project_cli(cli_args))
+
+    # ── BUILD ──
     if args.mission == "build":
         from backend.build.cli import run_build_mode
         from backend.domain.enums import ProjectType
         ptype = ProjectType(args.project_type) if args.project_type else None
-        code = await run_build_mode(
-            args.build_intent or "", project_name=args.project_name, project_type=ptype,
-        )
+        pipe = None
+        if args.project_id:
+            from backend.build.pipeline import BuildPipeline
+            pipe = BuildPipeline(memory_store=_project_pipeline_store(),
+                                 project_id=args.project_id, project_type=ptype)
+        code = await run_build_mode(args.build_intent or "", project_name=args.project_name,
+                                    project_type=ptype, pipeline=pipe)
         sys.exit(code)
 
-    # ── Modo VALIDATE (v4.4) ──
+    # ── VALIDATE ──
     if args.mission == "validate":
-            # ── Modo VALIDATE (v4.4 + v5.2) ──:
         from backend.validate.cli import run_validate_mode
         from backend.core.evidence.service import EvidenceService
-        from backend.core.evidence.providers import MockSearchProvider
-        
-        evidence_svc = None
-        if not args.no_evidence:
-            evidence_svc = EvidenceService(provider_name=args.evidence_provider)
-        
-        code = await run_validate_mode(
-            args.build_intent or "", 
-            context_files=args.files,
-            evidence_service=evidence_svc,
-        )
-        sys.exit(code)
-        from backend.validate.cli import run_validate_mode
-        code = await run_validate_mode(args.build_intent or "", context_files=args.files)
+        evidence_svc = None if args.no_evidence else EvidenceService(provider_name=args.evidence_provider)
+        pipe = None
+        if args.project_id:
+            from backend.validate.pipeline import ValidatePipeline
+            pipe = ValidatePipeline(evidence_service=evidence_svc,
+                                    memory_store=_project_pipeline_store(),
+                                    project_id=args.project_id)
+        code = await run_validate_mode(args.build_intent or "", context_files=args.files,
+                                       pipeline=pipe, evidence_service=evidence_svc)
         sys.exit(code)
 
-    # ── Modo VALIDATE_AND_BUILD (v4.5) ──
+    # ── VALIDATE_AND_BUILD ──
     if args.mission == "validate-and-build":
         from backend.validate_and_build.cli import run_validate_and_build_mode
+        pipe = None
+        if args.project_id:
+            from backend.validate_and_build.pipeline import ValidateAndBuildPipeline
+            pipe = ValidateAndBuildPipeline(memory_store=_project_pipeline_store(),
+                                            project_id=args.project_id)
         code = await run_validate_and_build_mode(
-            args.build_intent or "",
-            context_files=args.files,
-            no_build=args.no_build,
-            auto_build=args.auto_build,
-            no_confirm=args.no_confirm,
-        )
+            args.build_intent or "", context_files=args.files, no_build=args.no_build,
+            auto_build=args.auto_build, no_confirm=args.no_confirm, pipeline=pipe)
         sys.exit(code)
 
-    # ── Modo SELF-AUDIT (v4.6) ──
+    # ── SELF-AUDIT ──
     if args.mission == "self-audit":
         from backend.self_audit.cli import run_self_audit_mode
-        code = await run_self_audit_mode(
-            no_build=args.no_build, no_validate=args.no_validate,
-            no_vab=args.no_vab, max_per_mode=args.max_per_mode,
-        )
+        code = await run_self_audit_mode(no_build=args.no_build, no_validate=args.no_validate,
+                                         no_vab=args.no_vab, max_per_mode=args.max_per_mode)
         sys.exit(code)
 
-    # ── Modo DISCOVER (v4.7) ──
+    # ── DISCOVER ──
     if args.mission == "discover":
-            # ── Modo DISCOVER (v4.7 + v5.2) ──
         from backend.discover.cli import run_discover_mode
         from backend.core.evidence.service import EvidenceService
-        
-        evidence_svc = None
-        if not args.no_evidence:
-            evidence_svc = EvidenceService(provider_name=args.evidence_provider)
-        
-        code = await run_discover_mode(
-            args.build_intent or "",
-            max_opportunities=args.max_opportunities,
-            handoff_id=args.handoff_id,
-            evidence_service=evidence_svc,
-        )
-        sys.exit(code)
-        from backend.discover.cli import run_discover_mode
-        code = await run_discover_mode(
-            args.build_intent or "",
-            max_opportunities=args.max_opportunities,
-            handoff_id=args.handoff_id,
-        )
+        evidence_svc = None if args.no_evidence else EvidenceService(provider_name=args.evidence_provider)
+        code = await run_discover_mode(args.build_intent or "",
+                                       max_opportunities=args.max_opportunities,
+                                       handoff_id=args.handoff_id,
+                                       evidence_service=evidence_svc)
         sys.exit(code)
 
-    # ── Golden Missions (v5.0.0 GA) ──
+    # ── GOLDEN ──
     if args.mission == "golden-missions":
         from backend.golden.cli import run_golden_mode
         sys.exit(await run_golden_mode())
 
-    # ── Deliberação do Council (default) ──
+    # ── COUNCIL (default) ──
     if args.last or args.rerun:
-        mission, prev_files = _load_for_rerun(use_last=args.last, rerun_id=args.rerun, override_files=args.files)
+        mission, prev_files = _load_for_rerun(args.last, args.rerun, args.files)
     else:
         mission = args.mission or ""
         prev_files = args.files
-
     if not mission:
         _exit_error("Missão não pode ser vazia.")
-
     _render_config_warnings()
     context_block, included_files = _prepare_context(prev_files)
     _render_header(mission, included_files)
@@ -682,8 +540,6 @@ if __name__ == "__main__":
     except Exception as e:
         from backend.cli import friendly_error
         console.print()
-        console.print(Panel(
-            friendly_error(e),
-            title="[bold red]⚠  Erro[/bold red]", border_style="red", padding=(1, 2),
-        ))
+        console.print(Panel(friendly_error(e), title="[bold red]⚠  Erro[/bold red]",
+                            border_style="red", padding=(1, 2)))
         sys.exit(1)

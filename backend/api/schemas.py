@@ -26,6 +26,12 @@ class InteractionRequest(BaseModel):
     options: Optional[dict[str, Any]] = Field(
         default=None, description="Opções específicas do modo (ex: project_type, max)"
     )
+    project_id: Optional[str] = Field(
+        default=None, description="ID do projeto para vincular a missão à memória"
+    )
+    project_name: Optional[str] = Field(
+        default=None, description="Nome do projeto (cria/carrega por nome)"
+    )
 
 
 class InteractionResponse(BaseModel):

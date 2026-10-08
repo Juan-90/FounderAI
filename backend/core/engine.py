@@ -119,7 +119,9 @@ class MissionEngine:
         if mode == "validate":
             from backend.validate.pipeline import ValidatePipeline
             from backend.validate.schemas import ValidateRequest
-            pipe = ValidatePipeline(config=self._config)
+            pipe = ValidatePipeline(config=self._config,
+                project_id=request.project_id,
+                project_name=request.project_name,)
             state = await pipe.run(ValidateRequest(idea_text=request.prompt))
             return InteractionResponse(
                 mission_id=state.mission_id, status=_status_from(state.status),
@@ -133,7 +135,9 @@ class MissionEngine:
             from backend.build.pipeline import BuildPipeline
             from backend.domain.enums import ProjectType
             ptype = ProjectType(opts.get("project_type", "WEB_APP"))
-            pipe = BuildPipeline(config=self._config, project_type=ptype)
+            pipe = BuildPipeline(config=self._config, project_type=ptype,
+                project_id=request.project_id,
+                project_name=request.project_name,)
             state = await pipe.run(request.prompt, project_name=opts.get("name", "App"))
             return InteractionResponse(
                 mission_id=state.mission_id, status=_status_from(state.status),
@@ -145,7 +149,9 @@ class MissionEngine:
         if mode == "validate_and_build":
             from backend.validate_and_build.pipeline import ValidateAndBuildPipeline
             from backend.validate_and_build.schemas import ValidateAndBuildRequest
-            pipe = ValidateAndBuildPipeline(config=self._config)
+            pipe = ValidateAndBuildPipeline(config=self._config,
+                project_id=request.project_id,
+                project_name=request.project_name,)
             state = await pipe.run(
                 ValidateAndBuildRequest(
                     idea_text=request.prompt,
