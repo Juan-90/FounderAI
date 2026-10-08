@@ -1,0 +1,16 @@
+{
+  "provider": "mock",
+  "query": "concorrentes barbearias perdem tempo com agendamento manual",
+  "normalized_query": "concorrentes barbearias perdem tempo com agendamento manual",
+  "results": [
+    {
+      "title": "Booksy vs Trinks",
+      "snippet": "concorrentes dominam 60% do agendamento online",
+      "url": "https://techcrunch.com/booking",
+      "publisher": "TechCrunch",
+      "score": 1.0
+    }
+  ],
+  "stored_at": "2026-10-08T08:45:11.914046+00:00",
+  "ttl_seconds": 86400
+}

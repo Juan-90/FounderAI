@@ -1,0 +1,16 @@
+{
+  "provider": "mock",
+  "query": "barbearias perdem tempo com agendamento manual barbearias",
+  "normalized_query": "barbearias perdem tempo com agendamento manual barbearias",
+  "results": [
+    {
+      "title": "Pesquisa Sebrae 2024",
+      "snippet": "70% das barbearias ainda usam agenda de papel",
+      "url": "https://sebrae.com.br/barbearias",
+      "publisher": "Sebrae",
+      "score": 1.0
+    }
+  ],
+  "stored_at": "2026-10-08T08:45:11.909610+00:00",
+  "ttl_seconds": 86400
+}

@@ -1,0 +1,16 @@
+{
+  "provider": "mock",
+  "query": "q1",
+  "normalized_query": "q1",
+  "results": [
+    {
+      "title": "T",
+      "snippet": "S",
+      "url": "https://x/1",
+      "publisher": null,
+      "score": 1.0
+    }
+  ],
+  "stored_at": "2026-10-02T01:27:51.064270+00:00",
+  "ttl_seconds": 86400
+}

@@ -114,6 +114,11 @@ class Settings(BaseSettings):
     EVIDENCE_TIMEOUT_SECONDS: float = 10.0
     EVIDENCE_FAIL_OPEN: bool = True
 
+        # Cache de evidências (v5.2.1)
+    EVIDENCE_CACHE_ENABLED: bool = True
+    EVIDENCE_CACHE_TTL_SECONDS: int = 86400       # 24 horas
+    EVIDENCE_CACHE_BYPASS: bool = False
+
         # Provedores reais de busca (v5.2.1)
     TAVILY_API_KEY: str = ""
     SERPER_API_KEY: str = ""

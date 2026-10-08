@@ -1,0 +1,30 @@
+{
+  "provider": "mock",
+  "query": "serviços locais para PMEs em Brasil",
+  "normalized_query": "servicos locais para pmes em brasil",
+  "results": [
+    {
+      "title": "PMEs crescem",
+      "snippet": "PMEs adotam agenda inteligente para barbearias",
+      "url": "https://ibge.gov.br/pmes",
+      "publisher": "IBGE",
+      "score": 1.0
+    },
+    {
+      "title": "Agendamento digital",
+      "snippet": "Barbearias contratam controle de estoque para restaurantes",
+      "url": "https://sebrae.com.br/agenda",
+      "publisher": "Sebrae",
+      "score": 1.0
+    },
+    {
+      "title": "Carbono e PMEs",
+      "snippet": "Relatórios de carbono para PMEs ganham tração",
+      "url": "https://gov.br/carbono",
+      "publisher": "Gov",
+      "score": 1.0
+    }
+  ],
+  "stored_at": "2026-10-08T08:45:11.316389+00:00",
+  "ttl_seconds": 86400
+}

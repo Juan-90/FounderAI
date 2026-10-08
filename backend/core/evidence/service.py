@@ -1,5 +1,5 @@
 """
-EvidenceService — orquestra coleta, conversão e montagem do EvidenceGraph (v5.2.0).
+EvidenceService — orquestra coleta, cache, dedup e montagem do EvidenceGraph (v5.2.1).
 
 Regras rígidas:
   • FAIL_OPEN=True (default): falhas/timeout do provider gravam aviso e retornam
@@ -7,6 +7,8 @@ Regras rígidas:
   • to_evidence NUNCA inventa URLs ou fontes fictícias: só cria Source a partir
     do que o provider retornou; sem URL -> Source com url=None (legítimo).
   • Resultados sem title E sem snippet E sem publisher são descartados.
+  • Cache persistente em artifacts/.evidence_cache/ (evita re-chamadas idênticas).
+  • Deduplicação de sources/evidence/claims antes de montar o grafo.
 """
 
 from __future__ import annotations
@@ -14,9 +16,16 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.core.config import Settings, settings
+from backend.core.evidence.cache import FileEvidenceCache
+from backend.core.evidence.dedup import (
+    deduplicate_claims,
+    deduplicate_evidence,
+    deduplicate_sources,
+)
 from backend.core.evidence.providers import (
     HttpSearchProvider,
     MockSearchProvider,
@@ -31,7 +40,6 @@ from backend.domain.evidence import (
     EvidenceOrigin,
     Source,
 )
-from datetime import datetime, timezone
 
 
 @dataclass
@@ -71,9 +79,15 @@ class EvidenceService:
         self,
         config: Settings | None = None,
         provider: Optional[SearchProvider] = None,
+        cache: Optional[FileEvidenceCache] = None,
+        provider_name: str = "",
     ) -> None:
         self._config: Settings = config if config is not None else settings
         self._provider: SearchProvider = provider or self._default_provider()
+        self._cache = cache if cache is not None else FileEvidenceCache(config=self._config)
+        self._provider_name = (
+            provider_name or (self._config.EVIDENCE_PROVIDER or "mock").lower()
+        )
         self.warnings: list[str] = []
 
     @property
@@ -81,9 +95,14 @@ class EvidenceService:
         return self._config.EVIDENCE_ENABLED
 
     def _default_provider(self) -> SearchProvider:
-        from backend.core.evidence.providers import get_search_provider
-        return get_search_provider(self._config.EVIDENCE_PROVIDER or "mock",
-                                   config=self._config)
+        prov = (self._config.EVIDENCE_PROVIDER or "mock").lower()
+        if prov == "http":
+            return HttpSearchProvider(
+                endpoint=self._config.EVIDENCE_HTTP_ENDPOINT or "",
+                api_key=self._config.EVIDENCE_HTTP_API_KEY,
+                timeout_seconds=self._config.EVIDENCE_TIMEOUT_SECONDS,
+            )
+        return MockSearchProvider()
 
     # ── Plan ──
     def plan_queries(self, mode: str, payload: dict[str, Any]) -> list[SearchQuery]:
@@ -126,15 +145,21 @@ class EvidenceService:
             planned.append(SearchQuery(query=q, max_results=per_query, hints=[mode]))
         return planned
 
-    # ── Search ──
+    # ── Search (com cache) ──
     def search(self, queries: list[SearchQuery]) -> list[SearchResultItem]:
-        """Executa queries respeitando limites e FAIL_OPEN."""
+        """Executa queries respeitando limites, cache e FAIL_OPEN."""
         if not self.enabled:
             return []
         fail_open = self._config.EVIDENCE_FAIL_OPEN
         collected: list[SearchResultItem] = []
         cap = max(1, self._config.EVIDENCE_MAX_QUERIES_PER_MISSION)
         for sq in queries[:cap]:
+            # 1. tenta cache
+            cached = self._cache.get(self._provider_name, sq.query)
+            if cached is not None:
+                collected.extend(cached[: sq.max_results])
+                continue
+            # 2. miss -> chama provider
             try:
                 results = self._provider.search(sq.query, max_results=sq.max_results)
             except SearchProviderError as exc:
@@ -149,14 +174,19 @@ class EvidenceService:
                 if not fail_open:
                     raise
                 continue
+            # 3. salva no cache (fail-open interno)
+            self._cache.set(self._provider_name, sq.query, results)
             collected.extend(results)
         return collected
 
-    # ── To evidence (regra rígida) ──
+    # ── To evidence (regra rígida + dedup) ──
     def to_evidence(
         self, results: list[SearchResultItem]
     ) -> tuple[list[Source], list[EvidenceItem]]:
-        """Converte SearchResultItem em (Source[], EvidenceItem[]) sem inventar nada."""
+        """Converte SearchResultItem em (Source[], EvidenceItem[]) sem inventar nada.
+
+        Aplica dedup de sources e evidence_items antes de retornar.
+        """
         sources_by_id: dict[str, Source] = {}
         items: list[EvidenceItem] = []
         retrieved_at = _utcnow()
@@ -188,7 +218,19 @@ class EvidenceService:
                 confidence=max(0.0, min(1.0, r.score)),
                 tags=[],
             ))
-        return list(sources_by_id.values()), items
+        
+        # Deduplicação
+        sources_dedup, src_removed = deduplicate_sources(list(sources_by_id.values()))
+        items_dedup, ev_removed = deduplicate_evidence(items)
+        if src_removed:
+            self.warnings.append(
+                f"EvidenceService: {src_removed} fonte(s) duplicada(s) removida(s)."
+            )
+        if ev_removed:
+            self.warnings.append(
+                f"EvidenceService: {ev_removed} evidência(s) duplicada(s) removida(s)."
+            )
+        return sources_dedup, items_dedup
 
     # ── Bind claims ──
     def bind_claims(
@@ -211,7 +253,7 @@ class EvidenceService:
             updated.append(c.model_copy(update={"evidence_ids": merged}))
         return updated
 
-    # ── Build graph ──
+    # ── Build graph (com dedup de claims) ──
     def build_graph(
         self,
         mission_id: str,
@@ -219,9 +261,15 @@ class EvidenceService:
         evidence: list[EvidenceItem],
         sources: list[Source],
     ) -> EvidenceGraph:
+        """Monta o EvidenceGraph com deduplicação de claims."""
+        claims_dedup, removed = deduplicate_claims(claims)
+        if removed:
+            self.warnings.append(
+                f"EvidenceService: {removed} claim(s) duplicado(s) removido(s)."
+            )
         return EvidenceGraph(
             mission_id=mission_id,
-            claims=list(claims),
+            claims=list(claims_dedup),
             evidence_items=list(evidence),
             sources=list(sources),
             notes=list(self.warnings),

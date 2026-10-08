@@ -1,0 +1,16 @@
+{
+  "provider": "mock",
+  "query": "tendências de mercado serviços locais",
+  "normalized_query": "tendencias de mercado servicos locais",
+  "results": [
+    {
+      "title": "Tendências 2025",
+      "snippet": "agenda inteligente para barbearias em alta",
+      "url": "https://trend.com/agenda",
+      "publisher": "TrendCo",
+      "score": 1.0
+    }
+  ],
+  "stored_at": "2026-10-08T08:45:11.319907+00:00",
+  "ttl_seconds": 86400
+}
