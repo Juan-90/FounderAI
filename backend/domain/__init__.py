@@ -1,5 +1,5 @@
 """
-Modelos de domínio do FounderAI (v5.2.0 — inclui evidências).
+Modelos de domínio do FounderAI (v5.3.0 — inclui memória de projeto).
 """
 
 from backend.domain.artifacts import Artifact, ArtifactManager
@@ -17,18 +17,37 @@ from backend.domain.enums import (
     ProjectMode,
     ProjectType,
 )
+from backend.domain.memory import (
+    ArtifactKind,
+    ArtifactVersion,
+    MemoryDecision,
+    MemoryEvent,
+    MemoryEventType,
+    MemoryLearning,
+    ProjectMemory,
+)
+from backend.domain.memory_store import DiskProjectMemoryStore, ProjectMemoryStore
 from backend.domain.models import MissionState
 
 __all__ = [
     "Artifact",
+    "ArtifactKind",
     "ArtifactManager",
+    "ArtifactVersion",
     "Claim",
     "DeploymentStrategy",
+    "DiskProjectMemoryStore",
     "EvidenceGraph",
     "EvidenceItem",
     "EvidenceOrigin",
+    "MemoryDecision",
+    "MemoryEvent",
+    "MemoryEventType",
+    "MemoryLearning",
     "MissionState",
     "MissionStatus",
+    "ProjectMemory",
+    "ProjectMemoryStore",
     "ProjectMode",
     "ProjectType",
     "Source",
