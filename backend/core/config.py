@@ -123,6 +123,13 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = ""
     SERPER_API_KEY: str = ""
 
+
+    # ── v5.3.0 — Project Memory ──
+    PROJECT_MEMORY_ENABLED: bool = True
+    PROJECT_MEMORY_CONTEXT_MAX_CHARS: int = 8000
+    PROJECT_MEMORY_DIR: str = "artifacts/projects"
+    
+
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_timeout: float = 60.0

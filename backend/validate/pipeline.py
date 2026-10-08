@@ -1,12 +1,9 @@
 """
-ValidatePipeline — orquestrador do Modo VALIDATE (v5.2.0 + Evidence).
+ValidatePipeline — orquestrador do Modo VALIDATE (v5.3.0 + Memory Hooks + Evidence).
 
-7 etapas com os agentes reais: IdeaIntake → ProblemMarket → Competitor →
-TechnicalFeasibility → ContrarianRisk → ExperimentDesign → ValidationSynthesizer.
-
-v5.2.0: Injeta EvidenceService (opcional) nas análises de Mercado/Concorrência;
-calcula evidence_gaps reais; anexa seção "Evidence vs Opinion" ao relatório;
-persiste EvidenceGraph em artifacts/validate/<mission_id>/evidence/.
+v5.3.0: Injeta memória do projeto no contexto dos agentes (via intent) e
+grava eventos/decisões/artefatos ao finalizar.
+v5.2.0: Injeta EvidenceService e persiste EvidenceGraph.
 """
 
 from __future__ import annotations
@@ -21,16 +18,18 @@ from rich.console import Console
 
 from backend.core.config import Settings, settings
 from backend.core.evidence.service import EvidenceService
+from backend.core.memory_compiler import MemoryContextCompiler
+from backend.core.memory_hooks import (
+    attach_memory_to_intent,
+    build_memory_block,
+    record_validate_completion,
+    resolve_memory,
+)
 from backend.domain.artifacts import ArtifactManager
 from backend.domain.enums import MissionStatus, ProjectMode
-from backend.domain.evidence import (
-    Claim,
-    EvidenceGraph,
-    EvidenceItem,
-    EvidenceOrigin,
-    Source,
-)
+from backend.domain.evidence import Claim, EvidenceGraph, EvidenceItem, EvidenceOrigin
 from backend.domain.evidence_store import save_evidence_graph
+from backend.domain.memory_store import DiskProjectMemoryStore
 from backend.domain.models import MissionState
 from backend.validate.agents import (
     CompetitorAgent,
@@ -63,6 +62,9 @@ class ValidatePipeline:
         artifact_manager: ArtifactManager | None = None,
         config: Settings | None = None,
         evidence_service: Optional[EvidenceService] = None,
+        memory_store: Optional[DiskProjectMemoryStore] = None,
+        project_id: Optional[str] = None,
+        project_name: Optional[str] = None,
     ) -> None:
         self._config: Settings = config if config is not None else settings
         self._artifacts: ArtifactManager = (
@@ -70,6 +72,7 @@ class ValidatePipeline:
             if artifact_manager is not None
             else ArtifactManager(root=Path(self._config.VALIDATE_ARTIFACTS_DIR))
         )
+        self._evidence_service = evidence_service
         self._intake = IdeaIntakeAgent(client)
         self._problem = ProblemMarketAgent(client)
         self._competitor = CompetitorAgent(client)
@@ -77,7 +80,10 @@ class ValidatePipeline:
         self._contrarian = ContrarianRiskAgent(client)
         self._experiments = ExperimentDesignAgent(client)
         self._synth = ValidationSynthesizer(client)
-        self._evidence = evidence_service
+        self._memory_store = memory_store
+        self._project_id = project_id
+        self._project_name = project_name
+        self._compiler = MemoryContextCompiler(memory_store) if memory_store else None
         self.last_mission_id: Optional[str] = None
 
     @property
@@ -119,10 +125,10 @@ class ValidatePipeline:
         except Exception:
             pass
 
-    # ── Helpers de evidência (v5.2.0) ──
     def _extract_claims(
         self, idea_profile: dict, problem_market: dict, evidence_items: list[EvidenceItem]
     ) -> list[Claim]:
+        """Extrai claims principais e vincula a evidências por overlap."""
         claims: list[Claim] = []
         problem = problem_market.get("pain_description", "")
         if problem:
@@ -142,19 +148,25 @@ class ValidatePipeline:
     def _identify_evidence_gaps(
         self, problem_market: dict, evidence_items: list[EvidenceItem]
     ) -> list[str]:
-        if not evidence_items:
-            return ["Nenhuma evidência externa coletada — alegações são opinião do modelo."]
+        """Identifica lacunas onde claims não têm evidência externa."""
         gaps: list[str] = []
+        if not evidence_items:
+            gaps.append("Nenhuma evidência externa coletada — todas as alegações são opinião do modelo.")
+            return gaps
         problem = problem_market.get("pain_description", "")
-        if problem and not any(_kw(problem) & _kw(ev.quote_or_summary) for ev in evidence_items):
-            gaps.append(f"Sem evidência externa para o problema: '{problem[:80]}'")
+        if problem and not any(
+            any(kw in ev.quote_or_summary.lower() for kw in problem.lower().split()[:5])
+            for ev in evidence_items
+        ):
+            gaps.append(f"Sem evidência externa para o problema: '{problem[:80]}...'")
         return gaps
 
     def _evidence_section(
         self, claims: list[Claim], evidence_items: list[EvidenceItem],
-        sources: list[Source], gaps: list[str],
+        sources: list[Any], gaps: list[str],
     ) -> str:
-        src_by_id = {s.source_id: s for s in sources}
+        from backend.domain.evidence import Source
+        src_by_id = {s.source_id: s for s in sources if isinstance(s, Source)}
         ev_by_id = {e.evidence_id: e for e in evidence_items}
         lines = ["", "## Evidence vs Opinion", "", "### Claims com evidência externa"]
         cited = False
@@ -188,8 +200,19 @@ class ValidatePipeline:
             current_stage="init", mode_payload={"idea_text": request.idea_text},
         )
         self.last_mission_id = state.mission_id
+
+        # Injeção de memória (v5.3.0)
+        memory = None
+        if (self._memory_store is not None and self._compiler is not None
+                and (self._project_id or self._project_name)):
+            memory = resolve_memory(self._memory_store, self._project_id, self._project_name)
+            if memory is not None:
+                block = build_memory_block(self._compiler, memory.project_id)
+                request = request.model_copy(update={
+                    "idea_text": attach_memory_to_intent(request.idea_text, block)})
+
         evidence_items: list[EvidenceItem] = []
-        sources: list[Source] = []
+        sources: list[Any] = []
         claims: list[Claim] = []
         real_gaps: list[str] = []
 
@@ -225,13 +248,13 @@ class ValidatePipeline:
             self._advance(state, "competitors")
 
             # Evidence Search (v5.2.0) — após Mercado + Concorrência
-            if self._evidence is not None and self._evidence.enabled:
-                queries = self._evidence.plan_queries("validate", {
+            if self._evidence_service is not None and self._evidence_service.enabled:
+                queries = self._evidence_service.plan_queries("validate", {
                     "problem": problem_market.get("pain_description", ""),
                     "audience": problem_market.get("audience_segment", ""),
                 })
-                results = self._evidence.search(queries)
-                sources, evidence_items = self._evidence.to_evidence(results)
+                results = self._evidence_service.search(queries)
+                sources, evidence_items = self._evidence_service.to_evidence(results)
                 claims = self._extract_claims(idea_profile, problem_market, evidence_items)
                 real_gaps = self._identify_evidence_gaps(problem_market, evidence_items)
 
@@ -308,14 +331,25 @@ class ValidatePipeline:
             state.mode_payload["error_stage"] = state.current_stage
             self._save_failure_report(state, error_msg)
 
-        # Persiste EvidenceGraph (v5.2.0)
-        if evidence_items or sources:
-            graph = EvidenceGraph(
-                mission_id=state.mission_id, claims=claims,
-                evidence_items=evidence_items, sources=sources,
-                notes=self._evidence.warnings if self._evidence else [],
-            )
-            save_evidence_graph(self._artifacts.root / state.mission_id, graph)
+        finally:
+            # Persiste EvidenceGraph (v5.2.0)
+            if evidence_items or sources:
+                graph = EvidenceGraph(
+                    mission_id=state.mission_id, claims=claims,
+                    evidence_items=evidence_items, sources=sources,
+                    notes=self._evidence_service.warnings if self._evidence_service else [],
+                )
+                save_evidence_graph(self._artifacts.root / state.mission_id, graph)
 
-        self._artifacts.save_mission_state(state)
+            self._artifacts.save_mission_state(state)
+
+            # Gravação de memória (v5.3.0) — fail-open
+            if memory is not None and self._memory_store is not None:
+                try:
+                    record_validate_completion(
+                        self._memory_store, memory, state,
+                        self._artifacts.root / state.mission_id)
+                except Exception:
+                    pass
+
         return state

@@ -1,8 +1,9 @@
 """
-BuildPipeline — orquestrador do Modo BUILD (v4.5.0 — mission_id + BuildSeed).
+BuildPipeline — orquestrador do Modo BUILD (v5.3.0 + Memory Hooks).
 
-v4.5.0: run() aceita mission_id (compartilhar diretório de artefatos no
-VALIDATE_AND_BUILD) e seed (BuildSeed repassado ao RequirementsAgent).
+v5.3.0: Injeta memória do projeto no contexto dos agentes (via intent) e
+grava eventos/artefatos ao finalizar.
+v4.5.0: run() aceita mission_id e seed (BuildSeed repassado ao RequirementsAgent).
 v4.3 hotfix: repair do gate estático é gracioso (não propaga; segue p/ sandbox).
 """
 
@@ -22,8 +23,16 @@ from backend.build.agents import (
 )
 from backend.build.profiles import BaseProjectProfile, GameProfile, profile_for
 from backend.core.config import Settings, settings
+from backend.core.memory_compiler import MemoryContextCompiler
+from backend.core.memory_hooks import (
+    attach_memory_to_intent,
+    build_memory_block,
+    record_build_completion,
+    resolve_memory,
+)
 from backend.domain.artifacts import ArtifactManager
 from backend.domain.enums import MissionStatus, ProjectMode, ProjectType
+from backend.domain.memory_store import DiskProjectMemoryStore
 from backend.domain.models import MissionState
 from backend.qa.agent import QAAgent
 from backend.qa.schemas import TDDRequest, TDDResult
@@ -33,10 +42,8 @@ console = Console(stderr=True)
 
 StageCallback = Callable[[int, str], None]
 
-
 class StaticGateLike(Protocol):
     def run(self, files: dict[str, str]) -> StaticAnalysisResult: ...
-
 
 class RepairAgentLike(Protocol):
     async def generate_fix(
@@ -46,14 +53,11 @@ class RepairAgentLike(Protocol):
         analysis: str,
     ) -> tuple[dict[str, str], dict[str, str], str]: ...
 
-
 class TDDRunnerLike(Protocol):
     async def run(self, request: TDDRequest) -> TDDResult: ...
 
-
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
 
 class BuildPipeline:
     def __init__(
@@ -66,6 +70,9 @@ class BuildPipeline:
         config: Settings | None = None,
         project_type: ProjectType | None = None,
         profile: BaseProjectProfile | None = None,
+        memory_store: Optional[DiskProjectMemoryStore] = None,
+        project_id: Optional[str] = None,
+        project_name: Optional[str] = None,
     ) -> None:
         self._config: Settings = config if config is not None else settings
         self._artifacts: ArtifactManager = (
@@ -88,6 +95,11 @@ class BuildPipeline:
         else:
             from backend.qa.orchestrator import TDDLoop
             self._tdd = TDDLoop(config=self._config)
+        
+        self._memory_store = memory_store
+        self._project_id = project_id
+        self._project_name = project_name
+        self._compiler = MemoryContextCompiler(memory_store) if memory_store else None
 
     @property
     def profile(self) -> BaseProjectProfile:
@@ -178,6 +190,14 @@ class BuildPipeline:
         tests_success = False
         escalated = False
 
+        # Injeção de memória (v5.3.0)
+        memory = None
+        if (self._memory_store is not None and self._compiler is not None
+                and (self._project_id or self._project_name)):
+            memory = resolve_memory(self._memory_store, self._project_id, self._project_name)
+            if memory is not None:
+                intent = attach_memory_to_intent(intent, build_memory_block(self._compiler, memory.project_id))
+
         try:
             self._emit(on_stage, 1, "Generating Requirements...")
             req_md = await self._requirements.generate(intent, seed=seed)
@@ -242,5 +262,14 @@ class BuildPipeline:
         finally:
             state.updated_at = _utcnow()
             self._artifacts.save_mission_state(state)
+            
+            # Gravação de memória (v5.3.0) — fail-open
+            if memory is not None and self._memory_store is not None:
+                try:
+                    record_build_completion(
+                        self._memory_store, memory, state,
+                        self._artifacts.root / state.mission_id)
+                except Exception:
+                    pass
 
         return state

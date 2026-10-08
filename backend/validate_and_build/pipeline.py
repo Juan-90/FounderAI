@@ -1,32 +1,31 @@
 """
-ValidateAndBuildPipeline — orquestrador da Ponte Direta (v4.5.0).
+ValidateAndBuildPipeline — orquestrador da Ponte Direta (v5.3.0 + Memory Hooks).
 
-v4.5.0 hotfix: sub-pipelines tipados por Protocols estruturais
-(ValidatePipelineLike / BuildPipelineLike), permitindo injeção de fakes
-duck-typed nos testes sem erro de tipagem estática.
-
-Fluxo:
-  1. Executa ValidatePipeline (compartilhando mission_id).
-  2. Avalia via DecisionGate (puro).
-  3. should_build=False / no_build / auto_build=False -> encerra com relatório.
-  4. needs_human_confirmation=True -> status WAITING_HUMAN; se `confirm`
-     fornecido, consulta o humano; rejeição encerra; aprovação prossegue.
-  5. Aprovado: extrai BuildSeed e executa BuildPipeline (mesmo mission_id).
-  6. Persiste artefatos combinados em artifacts/validate_and_build/<mission_id>/.
-  7. Gera composite_report.md (Validação + Gate + Build).
+v5.3.0: Injeta memória do projeto no contexto dos agentes e grava ambas as fases
+(VALIDATE + BUILD) na mesma memória do projeto.
+v4.5.0 hotfix: sub-pipelines tipados por Protocols estruturais.
 """
 
 from __future__ import annotations
 
 import json
 import uuid
+from uuid import uuid4
 from pathlib import Path
 from typing import Any, Callable, Optional, Protocol
 
 from backend.build.pipeline import BuildPipeline
 from backend.core.config import Settings, settings
+from backend.core.memory_compiler import MemoryContextCompiler
+from backend.core.memory_hooks import (
+    attach_memory_to_intent,
+    build_memory_block,
+    record_vab_completion,
+    resolve_memory,
+)
 from backend.domain.artifacts import ArtifactManager
 from backend.domain.enums import MissionStatus, ProjectMode
+from backend.domain.memory_store import DiskProjectMemoryStore
 from backend.domain.models import MissionState
 from backend.validate.pipeline import ValidatePipeline
 from backend.validate.schemas import ValidateRequest
@@ -40,7 +39,6 @@ from backend.validate_and_build.schemas import (
 ConfirmCallback = Callable[[BuildGateDecision], bool]
 StageCallback = Callable[[int, str], None]
 
-
 class ValidatePipelineLike(Protocol):
     """Contrato estrutural do sub-pipeline de validação (reais e fakes)."""
 
@@ -50,7 +48,6 @@ class ValidatePipelineLike(Protocol):
         on_stage: Optional[StageCallback] = None,
         mission_id: Optional[str] = None,
     ) -> MissionState: ...
-
 
 class BuildPipelineLike(Protocol):
     """Contrato estrutural do sub-pipeline de construção (reais e fakes)."""
@@ -64,7 +61,6 @@ class BuildPipelineLike(Protocol):
         seed: Optional[BuildSeed] = None,
     ) -> MissionState: ...
 
-
 class ValidateAndBuildPipeline:
     """Orquestra VALIDATE → DecisionGate → BUILD com artefatos combinados."""
 
@@ -76,6 +72,9 @@ class ValidateAndBuildPipeline:
         validate_pipeline: ValidatePipelineLike | None = None,
         build_pipeline: BuildPipelineLike | None = None,
         gate: DecisionGate | None = None,
+        memory_store: Optional[DiskProjectMemoryStore] = None,
+        project_id: Optional[str] = None,
+        project_name: Optional[str] = None,
     ) -> None:
         self._config: Settings = config if config is not None else settings
         self._artifacts: ArtifactManager = (
@@ -98,6 +97,10 @@ class ValidateAndBuildPipeline:
             )
         )
         self._gate = gate or DecisionGate(self._config)
+        self._memory_store = memory_store
+        self._project_id = project_id
+        self._project_name = project_name
+        self._compiler = MemoryContextCompiler(memory_store) if memory_store else None
 
     @property
     def artifacts(self) -> ArtifactManager:
@@ -166,11 +169,22 @@ class ValidateAndBuildPipeline:
     ) -> MissionState:
         mission_id = uuid.uuid4().hex
         state = MissionState(
-            mission_id=mission_id, project_id=uuid.uuid4().hex,
+            mission_id=mission_id, project_id=uuid4().hex,
             mode=ProjectMode.VALIDATE_AND_BUILD, status=MissionStatus.IN_PROGRESS,
             current_stage="validate", mode_payload={},
         )
         bstate: MissionState | None = None
+        
+        # Injeção de memória (v5.3.0)
+        memory = None
+        if (self._memory_store is not None and self._compiler is not None
+                and (self._project_id or self._project_name)):
+            memory = resolve_memory(self._memory_store, self._project_id, self._project_name)
+            if memory is not None:
+                block = build_memory_block(self._compiler, memory.project_id)
+                request = request.model_copy(update={
+                    "idea_text": attach_memory_to_intent(request.idea_text, block)})
+        
         try:
             # 1 — Validação
             vstate = await self._validate.run(
@@ -251,5 +265,14 @@ class ValidateAndBuildPipeline:
             state.mode_payload["error"] = f"{type(exc).__name__}: {exc}"
         finally:
             self._artifacts.save_mission_state(state)
+            
+            # Gravação de memória (v5.3.0) — fail-open
+            if memory is not None and self._memory_store is not None:
+                try:
+                    record_vab_completion(
+                        self._memory_store, memory, state,
+                        self._artifacts.root / state.mission_id)
+                except Exception:
+                    pass
 
         return state
