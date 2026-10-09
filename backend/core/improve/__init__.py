@@ -1,10 +1,19 @@
 """
 Modo IMPROVE do FounderAI (v5.4.0).
-
-Diagnóstico → Plano → Aplicação com confirmação, alimentados pela memória
-do projeto (eventos, learnings, decisões e versões de artefatos).
 """
 
 from backend.core.improve.diagnoser import ImproveDiagnoser
+from backend.core.improve.patcher import (
+    ImprovePatcher,
+    ImproveQualityResult,
+    ImproveQualityRunner,
+)
+from backend.core.improve.planner import ImprovePlanner
 
-__all__ = ["ImproveDiagnoser"]
+__all__ = [
+    "ImproveDiagnoser",
+    "ImprovePatcher",
+    "ImprovePlanner",
+    "ImproveQualityResult",
+    "ImproveQualityRunner",
+]
