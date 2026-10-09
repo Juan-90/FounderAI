@@ -37,3 +37,5 @@ class MissionStatus(str, Enum):
     FAILED      = "FAILED"
     ESCALATED   = "ESCALATED"
     WAITING_HUMAN = "WAITING_HUMAN"
+
+    IMPROVE = "IMPROVE"   # v5.4.0 — melhoria contínua sobre a memória do projeto

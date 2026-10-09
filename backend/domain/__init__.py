@@ -27,6 +27,13 @@ from backend.domain.memory import (
     ProjectMemory,
 )
 from backend.domain.memory_store import DiskProjectMemoryStore, ProjectMemoryStore
+from backend.domain.improve import (
+    ImproveDiagnosis,
+    ImprovePlan,
+    ImprovePlanItem,
+    ImproveRequest,
+    ImproveResult,
+)
 from backend.domain.models import MissionState
 
 __all__ = [
@@ -40,6 +47,11 @@ __all__ = [
     "EvidenceGraph",
     "EvidenceItem",
     "EvidenceOrigin",
+    "ImproveDiagnosis",
+    "ImprovePlan",
+    "ImprovePlanItem",
+    "ImproveRequest",
+    "ImproveResult",
     "MemoryDecision",
     "MemoryEvent",
     "MemoryEventType",
