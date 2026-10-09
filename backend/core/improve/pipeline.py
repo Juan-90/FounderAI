@@ -1,19 +1,20 @@
 """
-ImprovePipeline — orquestração completa do modo IMPROVE (v5.4.0).
+ImprovePipeline — orquestração completa do modo IMPROVE (v5.5.x).
 
 Fluxo:
   1. Carrega ProjectMemory (DiskProjectMemoryStore).
   2. ImproveDiagnoser -> ImprovePlanner.
-  3. Gate humano: se (requires_confirmation and not auto_apply) OU risco
-     medium/high -> waiting_human=True, salva rascunho do plano e interrompe
-     ANTES de modificar código.
-  4. Aprovado/auto-apply: ImprovePatcher -> Quality Gate (Static + TDDLoop).
-  5. Relatório consolidado em
+  3. Gate humano: se (requires_confirmation and not auto_apply) -> waiting_human,
+     salva rascunho do plano e interrompe ANTES de modificar código.
+  4. Patch vazio -> status NO_CHANGES (sem IMPROVED, sem versões de código).
+  5. Aprovado/auto-apply: ImprovePatcher -> Quality Gate (Static + TDDLoop).
+  6. Relatório consolidado em
      artifacts/projects/<project_id>/versions/reports/improve_<vid>.md.
 
 Persistência de memória:
-  • Sucesso: evento IMPROVED + ArtifactVersion (code_bundle, relatório, tdd)
-    + MemoryLearning por item (correção -> impacto verificado).
+  • Sucesso (patch não-vazio): evento IMPROVED + ArtifactVersion
+    (code_bundle/relatório/tdd) + MemoryLearning por item.
+  • Patch vazio: NADA é gravado (status NO_CHANGES).
   • Falha/escalado: evento BUILD_FAILED/ESCALATED + learning do erro.
 """
 
@@ -102,12 +103,13 @@ class ImprovePipeline:
         self, memory: ProjectMemory, diagnosis: ImproveDiagnosis, plan: ImprovePlan,
         quality: Optional[ImproveQualityResult], changed: list[str], applied: bool,
     ) -> str:
-        lines = [f"# Improve Report — {memory.name}", "", "## Diagnóstico", diagnosis.summary, "", "## Plano"]
+        lines = [f"# Improve Report — {memory.name}", "", "## Diagnóstico",
+                 diagnosis.summary, "", "## Plano"]
         for i, it in enumerate(plan.items, 1):
             lines.append(f"{i}. {it.title} ({it.risk_level}) — {it.expected_impact}")
         lines += ["", "## Quality Gate"]
         if quality is None:
-            lines.append("- (não executado — aguardando confirmação)")
+            lines.append("- (não executado)")
         else:
             lines += [f"- passed: {quality.passed}", f"- escalated: {quality.escalated}",
                       f"- attempts: {quality.attempts}"]
@@ -123,7 +125,7 @@ class ImprovePipeline:
         memory = self._store.get(request.project_id)
         if memory is None:
             return ImproveResult(
-                success=False,
+                success=False, status="FAILED",
                 diagnosis=ImproveDiagnosis(summary="Projeto não encontrado.", risk_level="low"),
                 plan=ImprovePlan(items=[], overall_risk="low", requires_confirmation=False),
                 summary="Projeto não encontrado.",
@@ -141,15 +143,26 @@ class ImprovePipeline:
                 self._report_md(memory, diagnosis, plan, None, [], False),
             )
             return ImproveResult(
-                success=False, diagnosis=diagnosis, plan=plan,
+                success=False, status="WAITING_HUMAN", diagnosis=diagnosis, plan=plan,
                 report_path=str(draft), waiting_human=True,
                 summary="Plano aguardando confirmação humana.",
             )
 
-        # 4 — Patch + Quality Gate
+        # 4 — Patch
         bundle = self._load_bundle(memory)
         sources, tests = self._split(bundle)
         patch = self._patcher.generate_patch(plan, bundle, max_files=request.max_files_touched)
+
+        # Falso positivo: patch vazio -> NO_CHANGES (nada é gravado)
+        if not patch:
+            return ImproveResult(
+                success=False, status="NO_CHANGES", diagnosis=diagnosis, plan=plan,
+                changed_files=[], tdd_result=None, report_path=None,
+                escalated=False, waiting_human=False,
+                summary="Nenhuma alteração de código foi produzida (NO_PATCH_GENERATED).",
+            )
+
+        # 5 — Quality Gate
         quality = await self._quality.run(
             patch, source_files=sources, test_files=tests,
             goal=request.goal or memory.current_goal or memory.name,
@@ -191,7 +204,8 @@ class ImprovePipeline:
                     "other", mission_id=vid,
                 )
             return ImproveResult(
-                success=True, diagnosis=diagnosis, plan=plan, changed_files=changed,
+                success=True, status="APPLIED", diagnosis=diagnosis, plan=plan,
+                changed_files=changed,
                 tdd_result={"passed": True, "attempts": quality.attempts},
                 report_path=str(report_path), escalated=False, waiting_human=False,
                 summary=f"Melhoria aplicada em {len(changed)} arquivo(s).",
@@ -211,7 +225,9 @@ class ImprovePipeline:
             "qa_failure", mission_id=vid,
         )
         return ImproveResult(
-            success=False, diagnosis=diagnosis, plan=plan, changed_files=[],
+            success=False,
+            status="ESCALATED" if quality.escalated else "FAILED",
+            diagnosis=diagnosis, plan=plan, changed_files=[],
             tdd_result={"passed": False, "attempts": quality.attempts},
             report_path=str(report_path), escalated=quality.escalated,
             waiting_human=False, summary=f"Melhoria não aplicada: {quality.reason}",

@@ -1,9 +1,9 @@
 """
-Repositório de persistência da Memória de Projeto (v5.3.0).
+Repositório de persistência da Memória de Projeto (v5.5.x).
 
 DiskProjectMemoryStore: implementação em disco com gravação atômica
 (write to temp + os.replace) para prevenir corrupção de JSON em falhas.
-Estrutura: artifacts/projects/<project_id>/memory.json + versions/<kind>/.
+Estrutura: artifacts/projects/<project_id>/memory.json.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 from backend.domain.enums import DeploymentStrategy, ProjectType
 from backend.domain.memory import (
@@ -55,13 +55,19 @@ class ProjectMemoryStore(Protocol):
                deployment_strategy: Optional[DeploymentStrategy] = None) -> ProjectMemory: ...
     def save(self, memory: ProjectMemory) -> None: ...
     def append_event(self, project_id: str, type: MemoryEventType, message: str,
-                     mission_id: Optional[str] = None, data: Optional[dict[str, Any]] = None) -> MemoryEvent: ...
+                     mission_id: Optional[str] = None,
+                     data: Optional[dict[str, Any]] = None) -> MemoryEvent: ...
     def add_decision(self, project_id: str, title: str, rationale: str,
-                     status: str = "accepted", mission_id: Optional[str] = None) -> MemoryDecision: ...
+                     status: str = "accepted",
+                     mission_id: Optional[str] = None) -> MemoryDecision: ...
     def add_artifact_version(self, project_id: str, kind: ArtifactKind, path: str,
-                             mission_id: Optional[str] = None, summary: Optional[str] = None) -> ArtifactVersion: ...
+                             mission_id: Optional[str] = None,
+                             summary: Optional[str] = None,
+                             created_at: Optional[datetime] = None) -> ArtifactVersion: ...
     def add_learning(self, project_id: str, text: str, source: str,
                      mission_id: Optional[str] = None) -> MemoryLearning: ...
+    def atomic_mutate(self, project_id: str,
+                      mutator: Callable[[ProjectMemory], None]) -> Optional[ProjectMemory]: ...
     def latest_artifact(self, project_id: str, kind: ArtifactKind) -> Optional[ArtifactVersion]: ...
     def list_projects(self) -> list[ProjectMemory]: ...
 
@@ -91,14 +97,13 @@ class DiskProjectMemoryStore:
             raise
 
     def get(self, project_id: str) -> Optional[ProjectMemory]:
-        """Carrega a memória do projeto; None se não existir."""
         path = self._memory_file(project_id)
         if not path.exists():
             return None
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             return ProjectMemory.model_validate(data)
-        except (json.JSONDecodeError, Exception):
+        except (json.JSONDecodeError, ValueError):
             return None
 
     def create(
@@ -107,7 +112,6 @@ class DiskProjectMemoryStore:
         project_type: Optional[ProjectType] = None,
         deployment_strategy: Optional[DeploymentStrategy] = None,
     ) -> ProjectMemory:
-        """Cria nova memória de projeto e persiste."""
         now = _utcnow()
         memory = ProjectMemory(
             project_id=_new_id(),
@@ -121,11 +125,9 @@ class DiskProjectMemoryStore:
         return memory
 
     def save(self, memory: ProjectMemory) -> None:
-        """Persiste a memória completa (gravação atômica)."""
         memory.updated_at = _utcnow()
         path = self._memory_file(memory.project_id)
-        data = memory.model_dump_json(indent=2)
-        self._atomic_write(path, data)
+        self._atomic_write(path, memory.model_dump_json(indent=2))
 
     def append_event(
         self,
@@ -135,17 +137,12 @@ class DiskProjectMemoryStore:
         mission_id: Optional[str] = None,
         data: Optional[dict[str, Any]] = None,
     ) -> MemoryEvent:
-        """Adiciona evento à linha do tempo e persiste."""
         memory = self.get(project_id)
         if memory is None:
             raise ValueError(f"Projeto {project_id} não encontrado")
         event = MemoryEvent(
-            event_id=_new_id(),
-            type=type,
-            mission_id=mission_id,
-            message=message,
-            data=data or {},
-            created_at=_utcnow(),
+            event_id=_new_id(), type=type, mission_id=mission_id,
+            message=message, data=data or {}, created_at=_utcnow(),
         )
         memory.events.append(event)
         self.save(memory)
@@ -159,17 +156,13 @@ class DiskProjectMemoryStore:
         status: str = "accepted",
         mission_id: Optional[str] = None,
     ) -> MemoryDecision:
-        """Adiciona decisão e persiste."""
         memory = self.get(project_id)
         if memory is None:
             raise ValueError(f"Projeto {project_id} não encontrado")
         decision = MemoryDecision(
-            decision_id=_new_id(),
-            title=title,
-            rationale=rationale,
+            decision_id=_new_id(), title=title, rationale=rationale,
             status=status,  # type: ignore[arg-type]
-            mission_id=mission_id,
-            created_at=_utcnow(),
+            mission_id=mission_id, created_at=_utcnow(),
         )
         memory.decisions.append(decision)
         self.save(memory)
@@ -192,15 +185,10 @@ class DiskProjectMemoryStore:
         if memory is None:
             raise ValueError(f"Projeto {project_id} não encontrado")
         artifact_path = Path(path)
-        checksum = _checksum(artifact_path)
         version = ArtifactVersion(
-            version_id=_new_id(),
-            kind=kind,
-            path=str(artifact_path),
-            checksum=checksum,
-            mission_id=mission_id,
-            created_at=created_at or _utcnow(),
-            summary=summary,
+            version_id=_new_id(), kind=kind, path=str(artifact_path),
+            checksum=_checksum(artifact_path), mission_id=mission_id,
+            created_at=created_at or _utcnow(), summary=summary,
         )
         memory.artifact_versions.append(version)
         self.save(memory)
@@ -213,25 +201,32 @@ class DiskProjectMemoryStore:
         source: str,
         mission_id: Optional[str] = None,
     ) -> MemoryLearning:
-        """Adiciona aprendizado e persiste."""
         memory = self.get(project_id)
         if memory is None:
             raise ValueError(f"Projeto {project_id} não encontrado")
         learning = MemoryLearning(
-            learning_id=_new_id(),
-            text=text,
+            learning_id=_new_id(), text=text,
             source=source,  # type: ignore[arg-type]
-            mission_id=mission_id,
-            created_at=_utcnow(),
+            mission_id=mission_id, created_at=_utcnow(),
         )
         memory.learnings.append(learning)
         self.save(memory)
         return learning
 
+    def atomic_mutate(
+        self, project_id: str, mutator: Callable[[ProjectMemory], None]
+    ) -> Optional[ProjectMemory]:
+        """Aplica mutator à memória e persiste UMA vez (gravação atômica)."""
+        memory = self.get(project_id)
+        if memory is None:
+            return None
+        mutator(memory)
+        self.save(memory)
+        return memory
+
     def latest_artifact(
         self, project_id: str, kind: ArtifactKind
     ) -> Optional[ArtifactVersion]:
-        """Retorna a versão mais recente de um tipo de artefato."""
         memory = self.get(project_id)
         if memory is None:
             return None
@@ -241,7 +236,6 @@ class DiskProjectMemoryStore:
         return max(candidates, key=lambda v: v.created_at)
 
     def list_projects(self) -> list[ProjectMemory]:
-        """Lista todos os projetos com memória válida."""
         if not self._base.exists():
             return []
         projects: list[ProjectMemory] = []
@@ -253,8 +247,7 @@ class DiskProjectMemoryStore:
                 continue
             try:
                 data = json.loads(memory_file.read_text(encoding="utf-8"))
-                memory = ProjectMemory.model_validate(data)
-                projects.append(memory)
-            except (json.JSONDecodeError, Exception):
+                projects.append(ProjectMemory.model_validate(data))
+            except (json.JSONDecodeError, ValueError):
                 continue
         return projects

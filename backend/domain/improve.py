@@ -1,5 +1,5 @@
 """
-Modelos de domínio do Modo IMPROVE (v5.4.0).
+Modelos de domínio do Modo IMPROVE (v5.5.x).
 
 IMPROVE fecha o loop de versionamento: diagnostica o projeto a partir da
 memória acumulada, planeja melhorias e as aplica com confirmação humana.
@@ -12,6 +12,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 RiskLevel = Literal["low", "medium", "high"]
+ImproveStatus = Literal["APPLIED", "NO_CHANGES", "FAILED", "WAITING_HUMAN", "ESCALATED"]
 
 
 class ImproveRequest(BaseModel):
@@ -57,6 +58,7 @@ class ImproveResult(BaseModel):
     """Resultado completo de uma execução IMPROVE."""
 
     success: bool
+    status: ImproveStatus = "APPLIED"
     diagnosis: ImproveDiagnosis
     plan: ImprovePlan
     changed_files: list[str] = Field(default_factory=list)

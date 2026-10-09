@@ -1,0 +1,38 @@
+{
+  "project_id": "822c0f21167545f68389fdd1d209083c",
+  "name": "SmokeProject",
+  "project_type": null,
+  "deployment_strategy": null,
+  "current_goal": null,
+  "status": "active",
+  "events": [
+    {
+      "event_id": "1a268dda97bc42bcb9d9084ac53cbe3b",
+      "type": "observed",
+      "mission_id": null,
+      "message": "Feedback observado (rating=5)",
+      "data": {
+        "rating": 5,
+        "tags": [
+          "smoke"
+        ]
+      },
+      "created_at": "2026-10-09T22:11:20.595543Z"
+    }
+  ],
+  "decisions": [],
+  "artifact_versions": [],
+  "evidence_refs": [],
+  "learnings": [
+    {
+      "learning_id": "27510f0ba0f64bc69110d4c1d427af29",
+      "text": "Feedback humano: rating=5 tags=[smoke] — smoke ok",
+      "source": "human_feedback",
+      "mission_id": null,
+      "created_at": "2026-10-09T22:11:20.595543Z"
+    }
+  ],
+  "tags": [],
+  "created_at": "2026-10-09T22:11:20.547134Z",
+  "updated_at": "2026-10-09T22:11:20.595543Z"
+}

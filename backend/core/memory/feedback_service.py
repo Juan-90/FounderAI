@@ -1,19 +1,25 @@
 """
-FeedbackService — grava feedback humano na Project Memory (v5.5.0).
+FeedbackService — grava feedback humano na Project Memory (v5.5.x).
 
-record_feedback: valida (rating OU note), cria MemoryLearning
-(source="human_feedback") + evento OBSERVED, persistindo atomicamente
-via DiskProjectMemoryStore (temp + os.replace).
+record_feedback: valida (rating OU note) e grava MemoryLearning
+(source="human_feedback") + evento OBSERVED em UMA ÚNICA operação atômica
+(store.atomic_mutate -> temp + os.replace), evitando estado parcial.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
+from uuid import uuid4
 
 from backend.core.config import Settings, settings
 from backend.domain.feedback import ProjectFeedbackRequest, ProjectFeedbackResult
-from backend.domain.memory import MemoryEventType
+from backend.domain.memory import MemoryEvent, MemoryEventType, MemoryLearning
 from backend.domain.memory_store import DiskProjectMemoryStore
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class FeedbackService:
@@ -28,6 +34,12 @@ class FeedbackService:
                 accepted=False, summary="OBSERVE_FEEDBACK_ENABLED=false."
             )
 
+        project_id = request.project_id
+        if not project_id:
+            return ProjectFeedbackResult(
+                accepted=False, summary="project_id obrigatório."
+            )
+
         has_rating = request.rating is not None
         note = (request.note or "").strip()
         if not has_rating and not note:
@@ -35,8 +47,7 @@ class FeedbackService:
                 accepted=False, summary="Feedback vazio: informe rating ou note."
             )
 
-        memory = store.get(request.project_id)
-        if memory is None:
+        if store.get(project_id) is None:
             return ProjectFeedbackResult(
                 accepted=False, summary="Projeto não encontrado."
             )
@@ -51,14 +62,28 @@ class FeedbackService:
         if note:
             text += f" — {note}"
 
-        learning = store.add_learning(
-            request.project_id, text, "human_feedback", mission_id=request.mission_id,
+        now = _utcnow()
+        learning = MemoryLearning(
+            learning_id=uuid4().hex, text=text, source="human_feedback",
+            mission_id=request.mission_id, created_at=now,
         )
-        event = store.append_event(
-            request.project_id, MemoryEventType.OBSERVED,
-            f"Feedback observado ({rating_txt})", mission_id=request.mission_id,
+        event = MemoryEvent(
+            event_id=uuid4().hex, type=MemoryEventType.OBSERVED,
+            mission_id=request.mission_id,
+            message=f"Feedback observado ({rating_txt})",
             data={"rating": request.rating, "tags": list(request.tags)},
+            created_at=now,
         )
+
+        def _mutate(memory) -> None:
+            memory.learnings.append(learning)
+            memory.events.append(event)
+
+        updated = store.atomic_mutate(project_id, _mutate)
+        if updated is None:
+            return ProjectFeedbackResult(
+                accepted=False, summary="Projeto não encontrado."
+            )
         return ProjectFeedbackResult(
             accepted=True, learning_id=learning.learning_id,
             event_id=event.event_id, summary=text,
