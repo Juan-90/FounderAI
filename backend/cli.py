@@ -169,10 +169,15 @@ def cmd_feedback(
     cfg = config if config is not None else settings
     store = _get_store(cfg)
     svc = FeedbackService(config=cfg)
-    result = svc.record_feedback(store, ProjectFeedbackRequest(
-        project_id=project_id, rating=rating, note=note,
-        tags=tags or [], mission_id=mission,
-    ))
+    try:
+        result = svc.record_feedback(store, ProjectFeedbackRequest(
+            project_id=project_id, rating=rating, note=note,
+            tags=tags or [], mission_id=mission,
+        ))
+    except Exception as exc:
+        console.print(f"[red]Erro ao registrar feedback:[/red] {friendly_error(exc)}")
+        return 1
+    
     if not result.accepted:
         console.print(f"[red]Feedback não registrado:[/red] {result.summary}")
         return 1
@@ -275,7 +280,28 @@ async def run_improve_mode(
         auto_apply=auto_apply,
         max_files_touched=cfg.IMPROVE_MAX_FILES_TOUCHED,
     )
-    result = await pipe.execute(request)
+    try:
+        result = await pipe.execute(request)
+    except Exception as exc:
+        console.print(f"[red]Erro no IMPROVE:[/red] {friendly_error(exc)}")
+        return 1
+    _render_improve(result)
+
+    if result.waiting_human:
+        answer = console.input("\n[bold yellow]Aplicar patch? [y/N]:[/bold yellow] ").strip().lower()
+        if answer in ("y", "yes"):
+            approved = request.model_copy(update={
+                "require_human_confirmation": False, "auto_apply": True})
+            try:
+                result = await pipe.execute(approved)
+            except Exception as exc:
+                console.print(f"[red]Erro ao aplicar:[/red] {friendly_error(exc)}")
+                return 1
+            _render_improve(result)
+        else:
+            console.print("[dim]Aplicação cancelada; plano mantido como rascunho.[/dim]")
+            return 0
+    return 0 if result.success else 1
     _render_improve(result)
 
     if result.waiting_human:

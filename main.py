@@ -11,7 +11,7 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Callable, NoReturn
 
 from rich.console import Console
 from rich.panel import Panel
@@ -141,7 +141,7 @@ def _interactive_menu() -> argparse.Namespace:
     return ns
 
 
-def _exit_error(message: str, exception: Exception | None = None) -> None:
+def _exit_error(message: str, exception: Exception | None = None) -> NoReturn:
     detail = str(exception) if exception else ""
     body = message + (f"\n\n[dim]{detail}[/dim]" if detail else "")
     console.print()
@@ -538,6 +538,18 @@ async def main() -> None:
     if args.mission == "golden-missions":
         from backend.golden.cli import run_golden_mode
         sys.exit(await run_golden_mode())
+
+    # ── SMOKE (v5.5.0) ──
+    if args.mission == "smoke":
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location(
+            "smoke_release", Path(__file__).resolve().parent / "scripts" / "smoke_release.py")
+        if _spec is None or _spec.loader is None:
+            _exit_error("Não foi possível carregar scripts/smoke_release.py.")
+        _mod = _ilu.module_from_spec(_spec)
+        sys.modules["smoke_release"] = _mod   # essencial p/ @dataclass resolver anotacoes
+        _spec.loader.exec_module(_mod)
+        sys.exit(_mod.main())
 
     # ── IMPROVE (v5.4.0) ──
     if args.mission == "improve":

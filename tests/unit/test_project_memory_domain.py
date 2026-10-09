@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -168,21 +168,20 @@ def test_latest_artifact(tmp_path: Path) -> None:
     store = DiskProjectMemoryStore(base_dir=tmp_path)
     memory = store.create(name="Teste")
 
-    # Adiciona 3 versões do mesmo tipo
+    base = datetime.now(timezone.utc)
     for i in range(3):
         store.add_artifact_version(
             memory.project_id,
             ArtifactKind.CODE_BUNDLE,
             f"/path/v{i}.zip",
             summary=f"Versão {i}",
+            created_at=base + timedelta(seconds=i + 1),
         )
-        time.sleep(0.01)  # garante timestamps diferentes
 
     latest = store.latest_artifact(memory.project_id, ArtifactKind.CODE_BUNDLE)
     assert latest is not None
-    assert latest.summary == "Versão 2"  # última adicionada
+    assert latest.summary == "Versão 2"  # maior created_at, determinístico
 
-    # Tipo inexistente retorna None
     assert store.latest_artifact(memory.project_id, ArtifactKind.VALIDATION_REPORT) is None
 
 

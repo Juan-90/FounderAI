@@ -1,0 +1,81 @@
+{
+  "project_id": "7541fe6401d9434f8afd3396598bec59",
+  "name": "SmokeProject",
+  "project_type": null,
+  "deployment_strategy": null,
+  "current_goal": null,
+  "status": "active",
+  "events": [
+    {
+      "event_id": "0f79d8de4f8c4c6b86caf6d0cd74b26b",
+      "type": "observed",
+      "mission_id": null,
+      "message": "Feedback observado (rating=5)",
+      "data": {
+        "rating": 5,
+        "tags": [
+          "smoke"
+        ]
+      },
+      "created_at": "2026-10-09T09:48:52.496916Z"
+    },
+    {
+      "event_id": "0bdc105faf28443198e48d8841e6925c",
+      "type": "improved",
+      "mission_id": "14cf4dc0bb1b47d7aab8d2e5fccfd51c",
+      "message": "Melhoria aplicada (0 arquivo(s))",
+      "data": {},
+      "created_at": "2026-10-09T09:48:52.535188Z"
+    }
+  ],
+  "decisions": [],
+  "artifact_versions": [
+    {
+      "version_id": "6be46584a1544a37934d008c39b01f87",
+      "kind": "code_bundle",
+      "path": "artifacts\\projects\\7541fe6401d9434f8afd3396598bec59\\versions\\code_bundle\\code_bundle_14cf4dc0bb1b47d7aab8d2e5fccfd51c.json",
+      "checksum": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "mission_id": "14cf4dc0bb1b47d7aab8d2e5fccfd51c",
+      "created_at": "2026-10-09T09:48:52.552700Z",
+      "summary": "code bundle pós-melhoria"
+    },
+    {
+      "version_id": "e196f82fba074154984e330a5da63daf",
+      "kind": "composite_report",
+      "path": "artifacts\\projects\\7541fe6401d9434f8afd3396598bec59\\versions\\reports\\improve_14cf4dc0bb1b47d7aab8d2e5fccfd51c.md",
+      "checksum": "77ec23004afe601e49320b964d2cb9e3cc69ea2aef7973077d2d413f0c3264f5",
+      "mission_id": "14cf4dc0bb1b47d7aab8d2e5fccfd51c",
+      "created_at": "2026-10-09T09:48:52.571671Z",
+      "summary": "relatório improve"
+    },
+    {
+      "version_id": "4ffd179477bf4be7a34daa70056e6d7c",
+      "kind": "test_report",
+      "path": "artifacts\\projects\\7541fe6401d9434f8afd3396598bec59\\versions\\reports\\tdd_14cf4dc0bb1b47d7aab8d2e5fccfd51c.md",
+      "checksum": "930b1768b4439d4ee19b4831c329823d98b62dcd5459bc6d0e662e950ef46c5b",
+      "mission_id": "14cf4dc0bb1b47d7aab8d2e5fccfd51c",
+      "created_at": "2026-10-09T09:48:52.592906Z",
+      "summary": "tdd pós-melhoria"
+    }
+  ],
+  "evidence_refs": [],
+  "learnings": [
+    {
+      "learning_id": "6a768f210886424e9cd557c56c1fe3c1",
+      "text": "Feedback humano: rating=5 tags=[smoke] — smoke ok",
+      "source": "human_feedback",
+      "mission_id": null,
+      "created_at": "2026-10-09T09:48:52.481437Z"
+    },
+    {
+      "learning_id": "80cbefbebc6a46f89bc7a96e1768871e",
+      "text": "Revisão de regressão e hardening -> Base estabilizada para próximas melhorias.",
+      "source": "other",
+      "mission_id": "14cf4dc0bb1b47d7aab8d2e5fccfd51c",
+      "created_at": "2026-10-09T09:48:52.608769Z"
+    }
+  ],
+  "tags": [],
+  "created_at": "2026-10-09T09:48:52.445453Z",
+  "updated_at": "2026-10-09T09:48:52.608769Z"
+}

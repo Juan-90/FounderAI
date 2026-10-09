@@ -182,8 +182,12 @@ class DiskProjectMemoryStore:
         path: str,
         mission_id: Optional[str] = None,
         summary: Optional[str] = None,
+        created_at: Optional[datetime] = None,
     ) -> ArtifactVersion:
-        """Adiciona versão de artefato (calcula checksum se arquivo existir)."""
+        """Adiciona versão de artefato (checksum se arquivo existir).
+
+        created_at opcional (default now) permite testes determinísticos sem sleep.
+        """
         memory = self.get(project_id)
         if memory is None:
             raise ValueError(f"Projeto {project_id} não encontrado")
@@ -195,7 +199,7 @@ class DiskProjectMemoryStore:
             path=str(artifact_path),
             checksum=checksum,
             mission_id=mission_id,
-            created_at=_utcnow(),
+            created_at=created_at or _utcnow(),
             summary=summary,
         )
         memory.artifact_versions.append(version)
