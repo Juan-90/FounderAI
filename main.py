@@ -1,8 +1,9 @@
 """
-Fundador IA v5.5.0 — CLI Principal.
+Fundador IA v5.5.2 — CLI Principal.
 
 Modos: council (default), build, validate, validate-and-build, self-audit,
-discover, golden-missions, project (v5.3 + feedback v5.5), improve (v5.4).
+discover, golden-missions, project (v5.3 + feedback v5.5), improve (v5.4),
+smoke (v5.5).
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ _CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 class _RichHelpFormatter(argparse.HelpFormatter):
     def format_help(self) -> str:
         return (
-            "\n  🏛  Fundador IA v5.5.0 — AI Project Operating System\n"
+            "\n  🏛  Fundador IA v5.5.2 — AI Project Operating System\n"
             "  ─────────────────────────────────────────────────────\n\n"
             + super().format_help()
             + "\n  Exemplos:\n"
@@ -37,11 +38,9 @@ class _RichHelpFormatter(argparse.HelpFormatter):
             "    python main.py build \"Sistema de agendamento\" --project <id>\n"
             "    python main.py validate \"Ideia\" --project <id>\n"
             "    python main.py project list\n"
-            "    python main.py project show <id>\n"
-            "    python main.py project timeline <id>\n"
-            "    python main.py project artifacts <id>\n"
             "    python main.py project feedback <id> --rating 5 --note \"ótimo\"\n"
-            "    python main.py improve --project <id>\n"
+            "    python main.py improve --project <id> --auto-apply\n"
+            "    python main.py smoke\n"
         )
 
 
@@ -53,7 +52,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("mission", nargs="?", default=None,
                         help="'build'|'validate'|'validate-and-build'|'self-audit'|"
-                             "'discover'|'golden-missions'|'project'|'improve'| ou texto da missão.")
+                             "'discover'|'golden-missions'|'project'|'improve'|'smoke'"
+                             "| ou texto da missão.")
     parser.add_argument("build_intent", nargs="?", default=None,
                         help="Intent/tema (build/validate/.../discover) ou action do project.")
     parser.add_argument("project_target", nargs="?", default=None,
@@ -69,6 +69,8 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Vincula a missão à memória do projeto (v5.3).")
     parser.add_argument("--goal", default=None, dest="goal", metavar="TEXTO",
                         help="IMPROVE: novo goal do projeto.")
+    parser.add_argument("--auto-apply", action="store_true", dest="auto_apply",
+                        help="IMPROVE: aplica o patch sem confirmação (default False).")
     parser.add_argument("--rating", type=int, default=None, choices=[1, 2, 3, 4, 5],
                         help="PROJECT feedback: nota 1-5.")
     parser.add_argument("--note", default=None, help="PROJECT feedback: nota textual.")
@@ -107,14 +109,15 @@ def _interactive_menu() -> argparse.Namespace:
     ns = argparse.Namespace(
         mission=None, build_intent=None, project_target=None, files=[], history=False,
         history_limit=5, last=False, rerun=None, project_name=None, project_type=None,
-        project_id=None, goal=None, rating=None, note=None, tags=None, mission_id=None,
+        project_id=None, goal=None, auto_apply=False, rating=None, note=None,
+        tags=None, mission_id=None,
         no_build=False, auto_build=False, no_confirm=False,
         no_validate=False, no_vab=False, max_per_mode=3, max_opportunities=8,
         handoff_id=None, no_evidence=False, evidence_provider=None,
     )
     console.print()
     console.print(Panel(
-        "[bold cyan]Fundador IA v5.5.0[/bold cyan] — AI Project Operating System\n\n"
+        "[bold cyan]Fundador IA v5.5.2[/bold cyan] — AI Project Operating System\n\n"
         "  [bold][1][/bold]  Nova Missão (deliberação)\n"
         "  [bold][2][/bold]  Reexecutar Última\n"
         "  [bold][3][/bold]  Ver Histórico\n"
@@ -257,7 +260,7 @@ def _render_header(mission: str, included_files: list[str]) -> None:
     console.print(Panel(
         f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
         f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{ctx}",
-        title="[bold cyan]🏛  Fundador IA v5.5.0[/bold cyan]", border_style="cyan", padding=(1, 2),
+        title="[bold cyan]🏛  Fundador IA v5.5.2[/bold cyan]", border_style="cyan", padding=(1, 2),
     ))
     console.print()
 
@@ -547,18 +550,19 @@ async def main() -> None:
         if _spec is None or _spec.loader is None:
             _exit_error("Não foi possível carregar scripts/smoke_release.py.")
         _mod = _ilu.module_from_spec(_spec)
-        sys.modules["smoke_release"] = _mod   # essencial p/ @dataclass resolver anotacoes
+        sys.modules["smoke_release"] = _mod
         _spec.loader.exec_module(_mod)
         sys.exit(_mod.main())
 
-    # ── IMPROVE (v5.4.0) ──
+    # ── IMPROVE (v5.4.0 + --auto-apply v5.5.2) ──
     if args.mission == "improve":
         from backend.cli import run_improve_mode
         if not args.project_id:
             _exit_error("IMPROVE exige --project <project_id>.")
         code = await run_improve_mode(
             args.project_id, goal=args.goal,
-            auto_apply=args.auto_apply, no_confirm=args.no_confirm,
+            auto_apply=getattr(args, "auto_apply", False),
+            no_confirm=args.no_confirm,
         )
         sys.exit(code)
 

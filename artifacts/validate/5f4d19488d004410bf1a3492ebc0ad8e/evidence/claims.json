@@ -1,0 +1,18 @@
+[
+  {
+    "claim_id": "cl-problem",
+    "text": "Many IoT deployments—especially in industrial, logistics, and smart‑city contexts—rely on continuous sensor streams to trigger safety or operational alerts.  When network links are intermittent or high‑latency, data loss or delayed processing can cause missed or late alerts, leading to safety incidents, regulatory non‑compliance, or costly downtime.  The lack of a proven, resilient ingestion architecture that guarantees timely alerting under such conditions represents a critical operational risk for these stakeholders.",
+    "origin": "model_opinion",
+    "confidence": 0.5,
+    "evidence_ids": [],
+    "used_in_decision": false
+  },
+  {
+    "claim_id": "cl-audience",
+    "text": "Público-alvo: Industrial automation operators, smart‑city infrastructure managers, logistics fleet coordinators, and any organization that depends on real‑time sensor data for safety or operational decision‑making.",
+    "origin": "model_opinion",
+    "confidence": 0.5,
+    "evidence_ids": [],
+    "used_in_decision": false
+  }
+]

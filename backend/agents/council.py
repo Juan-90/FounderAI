@@ -9,6 +9,9 @@ v3.5 / Fase 3 Bloco 2+: Observabilidade híbrida com retrocompatibilidade total:
   • Testes legados que fazem patch de
     `backend.agents.council.call_ollama_json` permanecem válidos (seam preservado);
   • Seam `_get_llm_client` para testes de integração/E2E com MockTransport.
+v5.5.2: system prompt do jurado resolvido de forma defensiva
+  (`_juror_system_prompt`: dict -> load_prompt(name) -> fallback), eliminando
+  KeyError: 'system_prompt' quando _evaluate_juror recebe jurados crus (JURORS).
 """
 
 from __future__ import annotations
@@ -47,6 +50,11 @@ _FALLBACK_REASONING: str = (
 )
 _FALLBACK_PROVIDER_TAG: str = "fallback-safe"
 
+_FALLBACK_JUROR_SYSTEM: str = (
+    "Você é um jurado especialista do FounderAI. Avalie com rigor, "
+    "separe fato de inferência e responda APENAS com JSON válido."
+)
+
 # ─────────────────────────────────────────
 # Definição dos Jurados (Módulo C2)
 # ─────────────────────────────────────────
@@ -64,6 +72,24 @@ def _resolve_jurors() -> List[dict]:
         {"name": j["name"], "system_prompt": load_prompt(j["name"])}
         for j in JURORS
     ]
+
+
+def _juror_system_prompt(juror: dict) -> str:
+    """System prompt defensivo (v5.5.2): dict -> load_prompt(name) -> fallback.
+
+    Nunca levanta KeyError, mesmo quando o jurado vem cru (só com 'name'),
+    como ocorre no main.py que itera JURORS diretamente.
+    """
+    existing = juror.get("system_prompt")
+    if isinstance(existing, str) and existing.strip():
+        return existing
+    try:
+        loaded = load_prompt(juror["name"])
+        if isinstance(loaded, str) and loaded.strip():
+            return loaded
+    except Exception:
+        pass
+    return _FALLBACK_JUROR_SYSTEM
 
 
 # ─────────────────────────────────────────
@@ -165,6 +191,7 @@ async def _evaluate_juror(
     (injetados pelo wrapper `call_ollama_json` deste módulo).
     """
     context_section = f"\n{context_block}" if context_block else ""
+    system_prompt = _juror_system_prompt(juror)  # v5.5.2: nunca KeyError
 
     user_prompt: str = (
         f"Avalie a seguinte missão como {juror['name']}:\n\n"
@@ -183,7 +210,7 @@ async def _evaluate_juror(
 
     try:
         raw = await call_ollama_json(
-            system_prompt=juror["system_prompt"],
+            system_prompt=system_prompt,
             user_prompt=user_prompt,
             model=settings.council_model,
             role=role,
@@ -209,7 +236,7 @@ async def _evaluate_juror(
 
     try:
         raw_retry: dict = await call_ollama_json(
-            system_prompt=juror["system_prompt"],
+            system_prompt=system_prompt,  # v5.5.2: resolvido, não indexado
             user_prompt=_correction_prompt(juror["name"], raw, first_error),
             model=settings.council_model,
             role=role,
@@ -259,7 +286,7 @@ async def run_council(
     responses: List[JurorResponse] = []
 
     for juror in resolved_jurors:
-        print(f"  🧑‍⚖️  Jurado [{juror['name']}] avaliando...")
+        print(f"  🧑‍️  Jurado [{juror['name']}] avaliando...")
         response = await _evaluate_juror(juror, mission, context_block)
         responses.append(response)
         print(f"     Score: {response.score:.1f} | Veredicto: {response.verdict.value}")

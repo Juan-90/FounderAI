@@ -1,0 +1,30 @@
+{
+  "provider": "mock",
+  "query": "concorrentes Many IoT deployments—especially in industrial, logistics, and smart‑city contexts—rely on continuous sensor streams to trigger safety or operational alerts.  When network links are intermittent or high‑latency, data loss or delayed processing can cause missed or late alerts, leading to safety incidents, regulatory non‑compliance, or costly downtime.  The lack of a proven, resilient ingestion architecture that guarantees timely alerting under such conditions represents a critical operational risk for these stakeholders.",
+  "normalized_query": "concorrentes many iot deployments—especially in industrial, logistics, and smart‐city contexts—rely on continuous sensor streams to trigger safety or operational alerts. when network links are intermittent or high‐latency, data loss or delayed processing can cause missed or late alerts, leading to safety incidents, regulatory non‐compliance, or costly downtime. the lack of a proven, resilient ingestion architecture that guarantees timely alerting under such conditions represents a critical operational risk for these stakeholders.",
+  "results": [
+    {
+      "title": "Mock result 1 for 'concorrentes Many IoT deployments—especi'",
+      "snippet": "Deterministic snippet 1 (digest prefix: c73fd876).",
+      "url": "https://mock.example/c73fd876/1",
+      "publisher": "mock-publisher",
+      "score": 1.0
+    },
+    {
+      "title": "Mock result 2 for 'concorrentes Many IoT deployments—especi'",
+      "snippet": "Deterministic snippet 2 (digest prefix: c73fd876).",
+      "url": "https://mock.example/c73fd876/2",
+      "publisher": "mock-publisher",
+      "score": 0.9
+    },
+    {
+      "title": "Mock result 3 for 'concorrentes Many IoT deployments—especi'",
+      "snippet": "Deterministic snippet 3 (digest prefix: c73fd876).",
+      "url": "https://mock.example/c73fd876/3",
+      "publisher": "mock-publisher",
+      "score": 0.8
+    }
+  ],
+  "stored_at": "2026-10-09T23:39:02.374842+00:00",
+  "ttl_seconds": 86400
+}

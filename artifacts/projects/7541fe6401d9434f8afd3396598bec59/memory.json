@@ -26,6 +26,17 @@
       "message": "Melhoria aplicada (0 arquivo(s))",
       "data": {},
       "created_at": "2026-10-09T09:48:52.535188Z"
+    },
+    {
+      "event_id": "6007133d50d8412595710d3e448b530c",
+      "type": "observed",
+      "mission_id": null,
+      "message": "Feedback observado (rating=4)",
+      "data": {
+        "rating": 4,
+        "tags": []
+      },
+      "created_at": "2026-10-09T23:22:44.143907Z"
     }
   ],
   "decisions": [],
@@ -73,9 +84,16 @@
       "source": "other",
       "mission_id": "14cf4dc0bb1b47d7aab8d2e5fccfd51c",
       "created_at": "2026-10-09T09:48:52.608769Z"
+    },
+    {
+      "learning_id": "4ab97db346c04bd587f40518f55c63f4",
+      "text": "Feedback humano: rating=4 — Necessario incluir notificacao via WhatsApp.",
+      "source": "human_feedback",
+      "mission_id": null,
+      "created_at": "2026-10-09T23:22:44.143907Z"
     }
   ],
   "tags": [],
   "created_at": "2026-10-09T09:48:52.445453Z",
-  "updated_at": "2026-10-09T09:48:52.608769Z"
+  "updated_at": "2026-10-09T23:22:44.145250Z"
 }

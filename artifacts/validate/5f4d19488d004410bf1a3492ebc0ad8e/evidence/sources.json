@@ -1,0 +1,50 @@
+[
+  {
+    "source_id": "src-7cf8ef32e5bb",
+    "title": "Mock result 1 for 'Many IoT deployments—especially in indus'",
+    "url": "https://mock.example/6cab99e7/1",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-09T23:39:02.376841Z",
+    "raw_snippet": "Deterministic snippet 1 (digest prefix: 6cab99e7)."
+  },
+  {
+    "source_id": "src-415e0c2d43d2",
+    "title": "Mock result 2 for 'Many IoT deployments—especially in indus'",
+    "url": "https://mock.example/6cab99e7/2",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-09T23:39:02.376841Z",
+    "raw_snippet": "Deterministic snippet 2 (digest prefix: 6cab99e7)."
+  },
+  {
+    "source_id": "src-925a851b787b",
+    "title": "Mock result 3 for 'Many IoT deployments—especially in indus'",
+    "url": "https://mock.example/6cab99e7/3",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-09T23:39:02.376841Z",
+    "raw_snippet": "Deterministic snippet 3 (digest prefix: 6cab99e7)."
+  },
+  {
+    "source_id": "src-952b8b652036",
+    "title": "Mock result 1 for 'concorrentes Many IoT deployments—especi'",
+    "url": "https://mock.example/c73fd876/1",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-09T23:39:02.376841Z",
+    "raw_snippet": "Deterministic snippet 1 (digest prefix: c73fd876)."
+  },
+  {
+    "source_id": "src-61313a21e1f9",
+    "title": "Mock result 2 for 'concorrentes Many IoT deployments—especi'",
+    "url": "https://mock.example/c73fd876/2",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-09T23:39:02.376841Z",
+    "raw_snippet": "Deterministic snippet 2 (digest prefix: c73fd876)."
+  },
+  {
+    "source_id": "src-ad7e857f9f5d",
+    "title": "Mock result 3 for 'concorrentes Many IoT deployments—especi'",
+    "url": "https://mock.example/c73fd876/3",
+    "publisher": "mock-publisher",
+    "retrieved_at": "2026-10-09T23:39:02.376841Z",
+    "raw_snippet": "Deterministic snippet 3 (digest prefix: c73fd876)."
+  }
+]

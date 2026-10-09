@@ -1,0 +1,30 @@
+{
+  "provider": "mock",
+  "query": "A falta de conformidade com a LGPD e a ineficiência dos sistemas de alarme de emergência para dados de saúde de idosos representam riscos regulatórios e de segurança críticos, podendo resultar em multas, processos judiciais e falhas na prestação de cuidados de saúde. Profissionais de saúde, gestores de casas de repouso, serviços de emergência e empresas de tecnologia de saúde que lidam com dados sensíveis de idosos.",
+  "normalized_query": "a falta de conformidade com a lgpd e a ineficiencia dos sistemas de alarme de emergencia para dados de saude de idosos representam riscos regulatorios e de seguranca criticos, podendo resultar em multas, processos judiciais e falhas na prestacao de cuidados de saude. profissionais de saude, gestores de casas de repouso, servicos de emergencia e empresas de tecnologia de saude que lidam com dados sensiveis de idosos.",
+  "results": [
+    {
+      "title": "Mock result 1 for 'A falta de conformidade com a LGPD e a i'",
+      "snippet": "Deterministic snippet 1 (digest prefix: cee300ec).",
+      "url": "https://mock.example/cee300ec/1",
+      "publisher": "mock-publisher",
+      "score": 1.0
+    },
+    {
+      "title": "Mock result 2 for 'A falta de conformidade com a LGPD e a i'",
+      "snippet": "Deterministic snippet 2 (digest prefix: cee300ec).",
+      "url": "https://mock.example/cee300ec/2",
+      "publisher": "mock-publisher",
+      "score": 0.9
+    },
+    {
+      "title": "Mock result 3 for 'A falta de conformidade com a LGPD e a i'",
+      "snippet": "Deterministic snippet 3 (digest prefix: cee300ec).",
+      "url": "https://mock.example/cee300ec/3",
+      "publisher": "mock-publisher",
+      "score": 0.8
+    }
+  ],
+  "stored_at": "2026-10-09T23:32:30.971390+00:00",
+  "ttl_seconds": 86400
+}

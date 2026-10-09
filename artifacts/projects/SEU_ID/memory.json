@@ -1,0 +1,98 @@
+{
+  "project_id": "SEU_ID",
+  "name": "SEU_ID",
+  "project_type": null,
+  "deployment_strategy": null,
+  "current_goal": null,
+  "status": "active",
+  "events": [
+    {
+      "event_id": "6fcfce83c72f4ff5986de393aefa69df",
+      "type": "validated",
+      "mission_id": "218a036446a14e8cbdd5ae71b5ca3fe0",
+      "message": "Validação concluída (FAILED)",
+      "data": {},
+      "created_at": "2026-10-09T23:32:34.981769Z"
+    },
+    {
+      "event_id": "b7adeffcd70c466a87eba1deb9bb8671",
+      "type": "validated",
+      "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+      "message": "Validação concluída (FAILED)",
+      "data": {},
+      "created_at": "2026-10-09T23:42:00.134327Z"
+    }
+  ],
+  "decisions": [],
+  "artifact_versions": [
+    {
+      "version_id": "f59f44fdfa1b4d909f3b347b4bb021e1",
+      "kind": "validation_report",
+      "path": "artifacts\\validate\\218a036446a14e8cbdd5ae71b5ca3fe0\\validation_report.md",
+      "checksum": "39af783b0b7dbff47e8b25e3c78779ab7dfafa9a0edb03239bd930ff3885ca11",
+      "mission_id": "218a036446a14e8cbdd5ae71b5ca3fe0",
+      "created_at": "2026-10-09T23:32:35.017978Z",
+      "summary": null
+    },
+    {
+      "version_id": "4e076f77d8f843abbc45ee211681a024",
+      "kind": "validation_report",
+      "path": "artifacts\\validate\\5f4d19488d004410bf1a3492ebc0ad8e\\validation_report.md",
+      "checksum": "32149aac629c5cc81a9d10a9cfbc61c5ce90563d3c2634dc4ead853d405ec27b",
+      "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+      "created_at": "2026-10-09T23:42:00.175606Z",
+      "summary": null
+    }
+  ],
+  "evidence_refs": [
+    "artifacts\\validate\\218a036446a14e8cbdd5ae71b5ca3fe0\\evidence\\evidence_graph.json",
+    "artifacts\\validate\\5f4d19488d004410bf1a3492ebc0ad8e\\evidence\\evidence_graph.json"
+  ],
+  "learnings": [
+    {
+      "learning_id": "730cb984d0da467297f823e5dfa5739a",
+      "text": "High technical complexity with limited differentiation from existing cloud‑centric IoT platforms",
+      "source": "validation_risk",
+      "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+      "created_at": "2026-10-09T23:42:00.200215Z"
+    },
+    {
+      "learning_id": "5d0001cf3f9340ff8c2295eed341bccb",
+      "text": "Uncertain business model: no clear revenue stream or pricing strategy identified",
+      "source": "validation_risk",
+      "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+      "created_at": "2026-10-09T23:42:00.220019Z"
+    },
+    {
+      "learning_id": "033247dde71b48b28dbd9f4572bd6302",
+      "text": "Target audience and market demand remain undefined, risking product-market fit failure",
+      "source": "validation_risk",
+      "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+      "created_at": "2026-10-09T23:42:00.242616Z"
+    },
+    {
+      "learning_id": "86ea2e94f37d4296ae64b8410637966c",
+      "text": "No explicit target audience is defined – who will use or benefit from this validation?",
+      "source": "validation_risk",
+      "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+      "created_at": "2026-10-09T23:42:00.264468Z"
+    },
+    {
+      "learning_id": "f8fc1ad1062f459db8166dce1bbcadc5",
+      "text": "The specific problem statement (pain points, current limitations) is missing.",
+      "source": "validation_risk",
+      "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+      "created_at": "2026-10-09T23:42:00.283133Z"
+    },
+    {
+      "learning_id": "2bbe599a0ad74bdf8da81c70076f0eb4",
+      "text": "The proposed solution details (architecture components, technologies, protocols) are not provided.",
+      "source": "validation_risk",
+      "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+      "created_at": "2026-10-09T23:42:00.307099Z"
+    }
+  ],
+  "tags": [],
+  "created_at": "2026-10-09T23:32:24.599011Z",
+  "updated_at": "2026-10-09T23:42:00.325892Z"
+}

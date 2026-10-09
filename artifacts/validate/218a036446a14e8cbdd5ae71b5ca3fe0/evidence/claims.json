@@ -1,0 +1,18 @@
+[
+  {
+    "claim_id": "cl-problem",
+    "text": "A falta de conformidade com a LGPD e a ineficiência dos sistemas de alarme de emergência para dados de saúde de idosos representam riscos regulatórios e de segurança críticos, podendo resultar em multas, processos judiciais e falhas na prestação de cuidados de saúde.",
+    "origin": "model_opinion",
+    "confidence": 0.5,
+    "evidence_ids": [],
+    "used_in_decision": false
+  },
+  {
+    "claim_id": "cl-audience",
+    "text": "Público-alvo: Profissionais de saúde, gestores de casas de repouso, serviços de emergência e empresas de tecnologia de saúde que lidam com dados sensíveis de idosos.",
+    "origin": "model_opinion",
+    "confidence": 0.5,
+    "evidence_ids": [],
+    "used_in_decision": false
+  }
+]

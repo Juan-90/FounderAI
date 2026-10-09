@@ -6,6 +6,10 @@ v4.4.0 hotfix 2: modelos de produção (Groq/local) podem OMITIR campos do schem
     defaults seguros, mantendo o pipeline resiliente.
   • Campos críticos (os cobertos pelos testes de contrato) permanecem obrigatórios.
   • Prompts reforçados com "inclua TODAS as chaves, mesmo que vazias".
+
+v5.5.2: IdeaIntakeAgent torna-se TOLERANTE — clarified_fields/assumptions/gaps
+  recebem defaults seguros ({} / [] / []) via require_clarified_fields, eliminando
+  ValidateAgentError quando a LLM omite clarified_fields. Apenas "summary" segue crítico.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from backend.core.llm_client import (
     _clean_json,
     _sanitize_json_for_parse,
 )
+from backend.utils.payload_guard import require_clarified_fields
 
 
 class ValidateAgentError(Exception):
@@ -72,7 +77,10 @@ def _require_keys(data: dict[str, Any], required: list[str], agent: str) -> None
 
 
 class IdeaIntakeAgent:
-    """Estágio 1/7 — Normaliza a ideia e extrai premissas/lacunas. (estrito)"""
+    """Estágio 1/7 — Normaliza a ideia e extrai premissas/lacunas. (tolerante v5.5.2)"""
+
+    _DEFAULTS = {"assumptions": [], "gaps": []}
+    _REQUIRED = ["summary"]
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
@@ -87,9 +95,10 @@ class IdeaIntakeAgent:
             '"solution": ..., "business_model": ..., "constraints": ...}}\n'
             "Cada campo de clarified_fields usa o valor do fundador ou null se ausente."
         )
-        data = _to_dict(await _call_json(self._client, user))
-        _require_keys(data, ["summary", "assumptions", "gaps", "clarified_fields"],
-                      "IdeaIntakeAgent")
+        data = _apply_defaults(_to_dict(await _call_json(self._client, user)), self._DEFAULTS)
+        _require_keys(data, self._REQUIRED, "IdeaIntakeAgent")
+        # v5.5.2: clarified_fields SEMPRE presente (default {}), sem ValidateAgentError
+        data["clarified_fields"] = require_clarified_fields(data)
         return data
 
 

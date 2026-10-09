@@ -1,0 +1,123 @@
+{
+  "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
+  "claims": [
+    {
+      "claim_id": "cl-problem",
+      "text": "Many IoT deployments—especially in industrial, logistics, and smart‑city contexts—rely on continuous sensor streams to trigger safety or operational alerts.  When network links are intermittent or high‑latency, data loss or delayed processing can cause missed or late alerts, leading to safety incidents, regulatory non‑compliance, or costly downtime.  The lack of a proven, resilient ingestion architecture that guarantees timely alerting under such conditions represents a critical operational risk for these stakeholders.",
+      "origin": "model_opinion",
+      "confidence": 0.5,
+      "evidence_ids": [],
+      "used_in_decision": false
+    },
+    {
+      "claim_id": "cl-audience",
+      "text": "Público-alvo: Industrial automation operators, smart‑city infrastructure managers, logistics fleet coordinators, and any organization that depends on real‑time sensor data for safety or operational decision‑making.",
+      "origin": "model_opinion",
+      "confidence": 0.5,
+      "evidence_ids": [],
+      "used_in_decision": false
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ev-025b5a8cb19e",
+      "source_id": "src-7cf8ef32e5bb",
+      "quote_or_summary": "Deterministic snippet 1 (digest prefix: 6cab99e7).",
+      "origin": "external",
+      "confidence": 1.0,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-d83005899698",
+      "source_id": "src-415e0c2d43d2",
+      "quote_or_summary": "Deterministic snippet 2 (digest prefix: 6cab99e7).",
+      "origin": "external",
+      "confidence": 0.9,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-6b31df0984eb",
+      "source_id": "src-925a851b787b",
+      "quote_or_summary": "Deterministic snippet 3 (digest prefix: 6cab99e7).",
+      "origin": "external",
+      "confidence": 0.8,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-3cd088b9b281",
+      "source_id": "src-952b8b652036",
+      "quote_or_summary": "Deterministic snippet 1 (digest prefix: c73fd876).",
+      "origin": "external",
+      "confidence": 1.0,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-c18b14171bde",
+      "source_id": "src-61313a21e1f9",
+      "quote_or_summary": "Deterministic snippet 2 (digest prefix: c73fd876).",
+      "origin": "external",
+      "confidence": 0.9,
+      "tags": []
+    },
+    {
+      "evidence_id": "ev-795950219158",
+      "source_id": "src-ad7e857f9f5d",
+      "quote_or_summary": "Deterministic snippet 3 (digest prefix: c73fd876).",
+      "origin": "external",
+      "confidence": 0.8,
+      "tags": []
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "src-7cf8ef32e5bb",
+      "title": "Mock result 1 for 'Many IoT deployments—especially in indus'",
+      "url": "https://mock.example/6cab99e7/1",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-09T23:39:02.376841Z",
+      "raw_snippet": "Deterministic snippet 1 (digest prefix: 6cab99e7)."
+    },
+    {
+      "source_id": "src-415e0c2d43d2",
+      "title": "Mock result 2 for 'Many IoT deployments—especially in indus'",
+      "url": "https://mock.example/6cab99e7/2",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-09T23:39:02.376841Z",
+      "raw_snippet": "Deterministic snippet 2 (digest prefix: 6cab99e7)."
+    },
+    {
+      "source_id": "src-925a851b787b",
+      "title": "Mock result 3 for 'Many IoT deployments—especially in indus'",
+      "url": "https://mock.example/6cab99e7/3",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-09T23:39:02.376841Z",
+      "raw_snippet": "Deterministic snippet 3 (digest prefix: 6cab99e7)."
+    },
+    {
+      "source_id": "src-952b8b652036",
+      "title": "Mock result 1 for 'concorrentes Many IoT deployments—especi'",
+      "url": "https://mock.example/c73fd876/1",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-09T23:39:02.376841Z",
+      "raw_snippet": "Deterministic snippet 1 (digest prefix: c73fd876)."
+    },
+    {
+      "source_id": "src-61313a21e1f9",
+      "title": "Mock result 2 for 'concorrentes Many IoT deployments—especi'",
+      "url": "https://mock.example/c73fd876/2",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-09T23:39:02.376841Z",
+      "raw_snippet": "Deterministic snippet 2 (digest prefix: c73fd876)."
+    },
+    {
+      "source_id": "src-ad7e857f9f5d",
+      "title": "Mock result 3 for 'concorrentes Many IoT deployments—especi'",
+      "url": "https://mock.example/c73fd876/3",
+      "publisher": "mock-publisher",
+      "retrieved_at": "2026-10-09T23:39:02.376841Z",
+      "raw_snippet": "Deterministic snippet 3 (digest prefix: c73fd876)."
+    }
+  ],
+  "notes": [],
+  "metrics": {}
+}

@@ -1,0 +1,42 @@
+{
+  "mission_id": "ea966eec079c4c3eb71ba82911f0ecbd",
+  "project_id": "bdbc0f6e725c42229af44eb7926db74c",
+  "mode": "BUILD",
+  "status": "FAILED",
+  "current_stage": "architecture",
+  "mode_payload": {
+    "project_name": "ShopCar",
+    "intent": "Criar modulo Web para a vitrine Shop-Car (https://github.com/Juan-90/Shop-Car). Sistema de catalogo de carros usados e seminovos, filtro avancado por ano/marca/preco, calculadora de simulacao de financiamento e formulario de propostas.",
+    "project_type": "WEB_APP",
+    "error": "LLMProviderError: [TIMEOUT] Inferência em 'local' (modelo 'gemma2:2b') excedeu 180.0s (timeout). Para código longo, aumente LLM_LOCAL_TIMEOUT_SECONDS / LLM_TIMEOUT_SECONDS no .env.",
+    "error_stage": "architecture"
+  },
+  "artifacts": [
+    {
+      "id": "492f69848c1246bf81d38ab52e509409",
+      "name": "requirements.md",
+      "type": "md",
+      "path": "ea966eec079c4c3eb71ba82911f0ecbd/requirements.md",
+      "content": "# Objetivo  \nDesenvolver um módulo web para a vitrine **Shop‑Car** que permita aos usuários visualizar, filtrar e solicitar propostas de carros usados e seminovos, além de simular financiamento.\n\n# Usuários  \n- **Compradores**: pessoas que buscam carros, filtram por ano, marca e preço, simulam financiamento e enviam propostas.  \n- **Vendedores**: proprietários ou concessionárias que cadastrarem veículos e acompanhem propostas recebidas.  \n- **Administradores**: gerenciam usuários, veículos e visualizam métricas básicas.\n\n# MVP  \n\n## Recursos CRUD / APIs  \n| Entidade | Operações | Endpoints (exemplo) | Observações |\n|----------|-----------|---------------------|-------------|\n| **Carro** | Create, Read (list & detail), Update, Delete | `POST /api/cars`, `GET /api/cars`, `GET /api/cars/:id`, `PUT /api/cars/:id`, `DELETE /api/cars/:id` | Apenas vendedores autenticados podem criar/editar/excluir. |\n| **Proposta** | Create, Read (list & detail), Update (status), Delete | `POST /api/proposals`, `GET /api/proposals`, `GET /api/proposals/:id`, `PUT /api/proposals/:id`, `DELETE /api/proposals/:id` | Vendedores recebem notificações de novas propostas. |\n| **Simulação** | Read (calculadora) | `POST /api/simulations` | Recebe `car_id`, `valor_financiado`, `prazo`, `taxa_juros` e devolve parcelas. |\n\n## Persistência  \n- Banco de dados relacional (PostgreSQL) com tabelas: `users`, `cars`, `proposals`, `simulations`.  \n- Relacionamentos: `user (1) – cars (N)`, `car (1) – proposals (N)`.  \n- Índices nos campos de filtro: `year`, `brand`, `price`.  \n\n## Listagem  \n- **Carros**: página `/cars` com filtros avançados (ano, marca, faixa de preço) e paginação (20 por página).  \n- **Propostas**: `/proposals` para vendedores, com filtros por status (pendente, aceita, rejeitada).  \n\n## Exclusão/Cancelamento  \n- Vendedores podem excluir carros que ainda não tenham propostas pendentes.  \n- Compradores podem cancelar propostas pendentes antes de aceitação.  \n- Operações de exclusão são soft‑delete (campo `deleted_at`) para auditoria.\n\n# Restrições  \n- **Tempo**: MVP deve estar funcional em 4 semanas de desenvolvimento.  \n- **Tecnologia**: Frontend em React (Next.js) + Tailwind CSS; Backend em Node.js (Express) + TypeScript.  \n- **Escalabilidade**: Design modular, API RESTful, uso de cache Redis para listagens frequentes.  \n- **Segurança**: JWT para autenticação, validação de entrada, proteção contra CSRF/XSS.  \n- **Deploy**: Dockerizado, pronto para execução em Kubernetes ou Heroku.  \n\n# Não‑objetivos  \n- Integração com sistemas de pagamento ou financiamento bancário.  \n- Análise de dados avançada ou dashboards de BI.  \n- Suporte multilíngue ou internacionalização.  \n- Funcionalidades de chat ao vivo ou suporte 24/7.  \n- Marketplace de revenda de carros (venda direta entre usuários).",
+      "created_at": "2026-10-09T23:32:56.367061Z"
+    },
+    {
+      "id": "75a00e31281d4b6185688094261b84c3",
+      "name": "architecture.md",
+      "type": "md",
+      "path": "ea966eec079c4c3eb71ba82911f0ecbd/architecture.md",
+      "content": "# Arquitetura do Web‑App – MVP “Shop‑Car”\n\n## # Stack  \n- **FastAPI** – framework web assíncrono.  \n- **SQLite** – banco de dados relacional leve (dev / MVP).  \n- **Uvicorn** – servidor ASGI.  \n- **Pydantic** – validação de dados e serialização.  \n- **Pytest** – testes unitários e de integração.\n\n---\n\n## # Arquivos Necessários  \n| Arquivo | Descrição |\n|---------|-----------|\n| **main.py** | Ponto de entrada da aplicação; cria o `FastAPI`, inclui routers e configura middlewares. |\n| **models.py** | Definições de modelos SQLAlchemy (tabelas `users`, `cars`, `proposals`, `simulations`). |\n| **schemas.py** | Schemas Pydantic para validação de entrada/saída (DTOs). |\n| **database.py** | Configuração da sessão SQLite, criação de engine e migrações simples. |\n| **test_main.py** | Testes de integração com Pytest usando `TestClient` do FastAPI. |\n\n---\n\n## # Responsabilidades por Arquivo  \n\n| Arquivo | Responsabilidade |\n|---------|------------------|\n| **main.py** | • Instancia `FastAPI`. <br>• Registra routers (`/api/cars`, `/api/proposals`, `/api/simulations`). <br>• Configura CORS, JWT auth e middlewares de logging. <br>• Inicia o servidor Uvicorn quando executado como script. |\n| **models.py** | • Define classes `User`, `Car`, `Proposal`, `Simulation` como subclasses de `Base` (SQLAlchemy). <br>• Estabelece relacionamentos (`user.cars`, `car.proposals`). <br>• Inclui campos de soft‑delete (`deleted_at`). |\n| **schemas.py** | • Cria Pydantic `BaseModel` para cada entidade: `CarCreate`, `CarRead`, `ProposalCreate`, `ProposalRead`, `SimulationRequest`, `SimulationResponse`. <br>• Garante validação de tipos e limites (ex.: preço > 0). |\n| **database.py** | • Cria `engine` apontando para `sqlite:///shopcar.db`. <br>• Configura `SessionLocal` e `Base.metadata.create_all()`. <br>• Exporta `get_db()` como dependency para routers. |\n| **test_main.py** | • Usa `TestClient` para enviar requisições HTTP simuladas. <br>• Testa endpoints CRUD, filtros, soft‑delete e cálculo de simulação. <br>• Verifica códigos de status, payloads e regras de negócio (ex.: vendedor não pode excluir carro com proposta pendente). |\n\n---\n\n## # Fluxo de Dados  \n\n```\nCliente (React/Next.js) ──► 1. Requisição HTTP (GET/POST/PUT/DELETE) ──►\nFastAPI (main.py) ──► 2. Middleware de Auth (JWT) ──►\nFastAPI Router ──► 3. Validação Pydantic (schemas.py) ──►\nFastAPI Router ──► 4. Operação de Banco (models.py via SessionLocal) ──►\nSQLite (database.py) ──► 5. Resultado (rows, status) ──►\nFastAPI Router ──► 6. Serialização Pydantic (schemas.py) ──►\nFastAPI (main.py) ──► 7. Resposta HTTP (JSON) ──►\nCliente\n```\n\n- **Autenticação**: JWT enviado no header `Authorization: Bearer <token>`.  \n- **Validação**: Schemas Pydantic garantem que dados de entrada estejam corretos antes de chegar ao banco.  \n- **Persistência**: SQLAlchemy mapeia objetos Python para tabelas SQLite; operações são atômicas dentro de uma sessão.  \n- **Soft‑Delete**: `deleted_at` é preenchido em vez de remover registro; filtros de listagem ignoram registros marcados.  \n- **Simulação**: Endpoint `/api/simulations` recebe parâmetros, calcula parcelas (ex.: amortização simples) e devolve JSON.  \n- **Notificações**: (não implementado no MVP) – placeholder para futura integração com WebSocket/Email.\n\n---\n\n> **Observação**: Este documento descreve a estrutura mínima e o fluxo de dados para o MVP. A implementação real deve seguir boas práticas de testes, logging e tratamento de exceções.",
+      "created_at": "2026-10-09T23:32:59.447342Z"
+    },
+    {
+      "id": "c32939ee16f948899e73675bcc0c1bef",
+      "name": "report.md",
+      "type": "md",
+      "path": "ea966eec079c4c3eb71ba82911f0ecbd/report.md",
+      "content": "# O que foi construído\nProjeto: ShopCar\nEstágio da falha: architecture\n\n# Resultado das Análises e Testes\nFALHA no estágio 'architecture'.\n\n# Erro\n```\nLLMProviderError: [TIMEOUT] Inferência em 'local' (modelo 'gemma2:2b') excedeu 180.0s (timeout). Para código longo, aumente LLM_LOCAL_TIMEOUT_SECONDS / LLM_TIMEOUT_SECONDS no .env.\n```\n\n# Limitações\n- Build interrompida; artefatos parciais podem existir.\n- Consulte mission_state.json (mode_payload.error) para o mesmo diagnóstico.\n",
+      "created_at": "2026-10-09T23:36:07.522232Z"
+    }
+  ],
+  "created_at": "2026-10-09T23:32:53.932240Z",
+  "updated_at": "2026-10-09T23:36:07.522232Z"
+}

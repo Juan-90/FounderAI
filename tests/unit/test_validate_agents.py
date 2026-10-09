@@ -136,11 +136,22 @@ def test_idea_intake_retorna_dict_completo() -> None:
     assert "name" in out["clarified_fields"]
 
 
-def test_idea_intake_campo_obrigatorio_ausente_raise() -> None:
+def test_idea_intake_summary_ausente_raise() -> None:
+    """summary segue crítico (v5.5.2): ausente -> ValidateAgentError."""
+    bad = {"assumptions": [], "gaps": [], "clarified_fields": {}}  # falta summary
+    agent = IdeaIntakeAgent(client=FakeValidateClient(bad))
+    with pytest.raises(ValidateAgentError, match="summary"):
+        asyncio.run(agent.analyze({}))
+
+
+def test_idea_intake_clarified_fields_omitido_default() -> None:
+    """v5.5.2: clarified_fields omitido -> default {} (sem raise)."""
     bad = {"summary": "x", "assumptions": [], "gaps": []}  # falta clarified_fields
     agent = IdeaIntakeAgent(client=FakeValidateClient(bad))
-    with pytest.raises(ValidateAgentError, match="clarified_fields"):
-        _run(agent.analyze({"idea_text": "x"}))
+    out = asyncio.run(agent.analyze({}))
+    assert out["clarified_fields"] == {}
+    assert out["assumptions"] == []
+    assert out["gaps"] == []
 
 
 # ─────────────────────────────────────────────────────────────

@@ -1,5 +1,9 @@
 """
-Agentes especializados do Modo BUILD (v4.5.0 — RequirementsAgent + BuildSeed).
+Agentes especializados do Modo BUILD (v5.5.2 — system prompt blindado).
+
+v5.5.2: cada agente resolve o system prompt via safe_system_prompt(...), com
+fallback para _SYSTEM quando o profile/config expõe um dict SEM a chave
+'system_prompt' (elimina KeyError: 'system_prompt' em qualquer origem).
 
 v4.5.0: RequirementsAgent aceita um BuildSeed opcional (contexto pré-validado
 do VALIDATE) e injeta escopo MVP recomendado, restrições, riscos a mitigar e
@@ -15,6 +19,7 @@ from typing import Any, Optional, Protocol
 
 from backend.build.profiles import BaseProjectProfile, WebAppProfile
 from backend.core.llm_client import LLMClient
+from backend.utils.payload_guard import safe_system_prompt
 from backend.validate_and_build.schemas import BuildSeed
 
 
@@ -44,6 +49,11 @@ _SYSTEM: str = (
     "Você é um engenheiro de software sênior do FounderAI, construindo um MVP "
     "real e executável. Seja concreto, mínimo e consistente."
 )
+
+
+def _resolve_system(profile: Optional[BaseProjectProfile]) -> str:
+    """System prompt com fallback seguro (v5.5.2): nunca KeyError."""
+    return safe_system_prompt(getattr(profile, "system_prompt", None), _SYSTEM)
 
 
 def _as_str_dict(value: object) -> dict[str, str] | None:
@@ -80,16 +90,16 @@ class RequirementsAgent:
         profile: BaseProjectProfile | None = None,
     ) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
-        # Default WebAppProfile preserva o comportamento da v4.3 quando sem profile.
         self._profile: BaseProjectProfile = (
             profile if profile is not None else WebAppProfile()
         )
+        self._system: str = _resolve_system(self._profile)
 
     async def generate(
         self, intent: str, seed: Optional[BuildSeed] = None
     ) -> str:
         user = self._profile.requirements_prompt(intent) + _seed_block(seed)
-        return await self._client.complete(system_prompt=_SYSTEM, user_prompt=user)
+        return await self._client.complete(system_prompt=self._system, user_prompt=user)
 
 
 class ArchitectureAgent:
@@ -104,10 +114,11 @@ class ArchitectureAgent:
         self._profile: BaseProjectProfile = (
             profile if profile is not None else WebAppProfile()
         )
+        self._system: str = _resolve_system(self._profile)
 
     async def generate(self, requirements_md: str) -> str:
         user = self._profile.architecture_prompt(requirements_md)
-        return await self._client.complete(system_prompt=_SYSTEM, user_prompt=user)
+        return await self._client.complete(system_prompt=self._system, user_prompt=user)
 
 
 class ImplementationAgent:
@@ -122,12 +133,13 @@ class ImplementationAgent:
         self._profile: BaseProjectProfile = (
             profile if profile is not None else WebAppProfile()
         )
+        self._system: str = _resolve_system(self._profile)
 
     async def generate(
         self, architecture_md: str
     ) -> tuple[dict[str, str], dict[str, str]]:
         user = self._profile.implementation_prompt(architecture_md)
-        data = await self._client.complete_json(system_prompt=_SYSTEM, user_prompt=user)
+        data = await self._client.complete_json(system_prompt=self._system, user_prompt=user)
         files = _as_str_dict(data.get("files"))
         if not files:
             raise BuildAgentError(
@@ -142,6 +154,7 @@ class BuildReporter:
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
+        self._system: str = _resolve_system(None)
 
     async def generate(self, context: dict[str, Any]) -> str:
         user = (
@@ -152,7 +165,7 @@ class BuildReporter:
             "# Limitações\n# Próximos passos\n"
         )
         try:
-            return await self._client.complete(system_prompt=_SYSTEM, user_prompt=user)
+            return await self._client.complete(system_prompt=self._system, user_prompt=user)
         except Exception:
             return self._fallback_report(context)
 

@@ -1,0 +1,50 @@
+[
+  {
+    "evidence_id": "ev-965f1f6ccb8b",
+    "source_id": "src-6794b67d5efe",
+    "quote_or_summary": "Deterministic snippet 1 (digest prefix: cee300ec).",
+    "origin": "external",
+    "confidence": 1.0,
+    "tags": []
+  },
+  {
+    "evidence_id": "ev-f435f9acffa4",
+    "source_id": "src-882b787e37d7",
+    "quote_or_summary": "Deterministic snippet 2 (digest prefix: cee300ec).",
+    "origin": "external",
+    "confidence": 0.9,
+    "tags": []
+  },
+  {
+    "evidence_id": "ev-8f83144e0114",
+    "source_id": "src-f18239e0ad5a",
+    "quote_or_summary": "Deterministic snippet 3 (digest prefix: cee300ec).",
+    "origin": "external",
+    "confidence": 0.8,
+    "tags": []
+  },
+  {
+    "evidence_id": "ev-eb24de56e68b",
+    "source_id": "src-2b850dbffe3a",
+    "quote_or_summary": "Deterministic snippet 1 (digest prefix: d0de5fc4).",
+    "origin": "external",
+    "confidence": 1.0,
+    "tags": []
+  },
+  {
+    "evidence_id": "ev-3f5cb31cf494",
+    "source_id": "src-61ba6f04959f",
+    "quote_or_summary": "Deterministic snippet 2 (digest prefix: d0de5fc4).",
+    "origin": "external",
+    "confidence": 0.9,
+    "tags": []
+  },
+  {
+    "evidence_id": "ev-78c836bb5117",
+    "source_id": "src-3f498884bbda",
+    "quote_or_summary": "Deterministic snippet 3 (digest prefix: d0de5fc4).",
+    "origin": "external",
+    "confidence": 0.8,
+    "tags": []
+  }
+]
