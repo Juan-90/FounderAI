@@ -8,11 +8,13 @@ from backend.core.improve.patcher import (
     ImproveQualityResult,
     ImproveQualityRunner,
 )
+from backend.core.improve.pipeline import ImprovePipeline
 from backend.core.improve.planner import ImprovePlanner
 
 __all__ = [
     "ImproveDiagnoser",
     "ImprovePatcher",
+    "ImprovePipeline",
     "ImprovePlanner",
     "ImproveQualityResult",
     "ImproveQualityRunner",
