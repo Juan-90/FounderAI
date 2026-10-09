@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     IMPROVE_MODE_ENABLED: bool = True
     IMPROVE_MAX_FILES_TOUCHED: int = 8
     IMPROVE_MAX_RETRIES: int = 2
+
+        # ── v5.5.0 — OBSERVE (feedback) ──
+    OBSERVE_FEEDBACK_ENABLED: bool = True
+    OBSERVE_FEEDBACK_MAX_NOTE_CHARS: int = 2000
     
 
     # ── Legado Fase 1 — Ollama ──

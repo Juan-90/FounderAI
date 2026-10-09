@@ -29,6 +29,7 @@ class MemoryEventType(str, Enum):
     ARTIFACT_VERSIONED = "artifact_versioned"
     LEARNING_ADDED = "learning_added"
     IMPROVED = "improved"
+    OBSERVED = "observed"   # v5.5.0 — feedback/observação registrada (OBSERVE mínimo)
 
 
 class ArtifactKind(str, Enum):

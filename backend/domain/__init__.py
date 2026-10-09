@@ -11,6 +11,9 @@ from backend.domain.evidence import (
     Source,
 )
 from backend.domain.evidence_store import load_evidence_graph, save_evidence_graph
+
+from backend.domain.feedback import ProjectFeedbackRequest, ProjectFeedbackResult
+
 from backend.domain.enums import (
     DeploymentStrategy,
     MissionStatus,
@@ -58,6 +61,8 @@ __all__ = [
     "MemoryLearning",
     "MissionState",
     "MissionStatus",
+    "ProjectFeedbackRequest",
+    "ProjectFeedbackResult",
     "ProjectMemory",
     "ProjectMemoryStore",
     "ProjectMode",
