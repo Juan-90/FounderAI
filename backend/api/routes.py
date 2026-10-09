@@ -212,3 +212,31 @@ async def get_project_artifacts(
     if memory is None:
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
     return [v.model_dump(mode="json") for v in memory.artifact_versions]
+
+@router.post("/api/v1/projects/{project_id}/improve")
+async def improve_project(
+    project_id: str,
+    payload: dict | None = None,
+    config: Settings = Depends(get_config),
+) -> dict:
+    from backend.core.improve.patcher import ImprovePatcher, ImproveQualityRunner
+    from backend.core.improve.pipeline import ImprovePipeline
+    from backend.domain.improve import ImproveRequest
+    from backend.domain.memory_store import DiskProjectMemoryStore
+
+    if not config.IMPROVE_MODE_ENABLED:
+        raise HTTPException(status_code=400, detail="IMPROVE desabilitado.")
+    body = payload or {}
+    store = DiskProjectMemoryStore(base_dir=Path(config.PROJECT_MEMORY_DIR))
+    pipe = ImprovePipeline(
+        store=store, config=config,
+        patcher=ImprovePatcher(), quality_runner=ImproveQualityRunner(),
+    )
+    result = await pipe.execute(ImproveRequest(
+        project_id=project_id,
+        goal=body.get("goal"),
+        auto_apply=bool(body.get("auto_apply", False)),
+        require_human_confirmation=bool(body.get("require_human_confirmation", True)),
+        max_files_touched=config.IMPROVE_MAX_FILES_TOUCHED,
+    ))
+    return result.model_dump(mode="json")

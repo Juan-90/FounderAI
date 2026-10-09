@@ -129,6 +129,11 @@ class Settings(BaseSettings):
     PROJECT_MEMORY_BACKEND: str = "disk"   # reservado (futuro: sqlite/redis)
     PROJECT_MEMORY_CONTEXT_MAX_CHARS: int = 8000
     PROJECT_MEMORY_DIR: str = "artifacts/projects"
+
+        # ── v5.4.0 — IMPROVE Mode ──
+    IMPROVE_MODE_ENABLED: bool = True
+    IMPROVE_MAX_FILES_TOUCHED: int = 8
+    IMPROVE_MAX_RETRIES: int = 2
     
 
     # ── Legado Fase 1 — Ollama ──

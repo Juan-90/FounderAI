@@ -181,6 +181,25 @@ pytest -q --run-golden        # inclui a bateria Golden Missions real
 
 ---
 
+## 🔧 Modo IMPROVE (v5.4.0)
+
+Fecha o loop de refinamento: **diagnostica** a memória do projeto, **planeja**
+melhorias, **aplica patches** com limite estrito de arquivos e **re-valida** em
+sandbox (static gate + TDD). Falhas passadas viram correções; correções viram
+aprendizados.
+
+
+
+Saída: tabela Rich com diagnóstico, plano de ações e status
+(`WAITING_HUMAN` / `SUCCESS` / `ESCALATED`); em `WAITING_HUMAN` pede `[y/N]`.
+
+Via API: `POST /api/v1/interact` com `mode:"improve"` (+`project_id`) ou atalho
+`POST /api/v1/projects/{id}/improve`.
+
+Variáveis: `IMPROVE_MODE_ENABLED`, `IMPROVE_MAX_FILES_TOUCHED` (limite estrito
+de arquivos por melhoria), `IMPROVE_MAX_RETRIES` (retries do TDD antes de
+escalar). Ver **ADR-022**.
+
 ## ⚠️ Limitações Honestas (v5.2.1)
 
 - **Relevância lexical:** `score_relevance` usa Jaccard (proxy); embeddings/RAG
@@ -205,6 +224,13 @@ pytest -q --run-golden        # inclui a bateria Golden Missions real
   context compiler, hooks nos pipelines, CLI `project`, API REST de projetos.
 - **v5.4.0** — IMPROVE Mode & Auto-refinement: learnings alimentam re-builds
   automáticos; UI web de timeline; backend de memória plugável (sqlite/redis).
+- **v6.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
+
+
+- **v5.4.0 (atual — GA)** — IMPROVE Mode & Auto-refinement: diagnose→plan→patch→
+  quality→apply com memória de projeto e gate humano.
+- **v5.5.0** — Generator LLM de patches plugável (providers) + auto-refinamento
+  agendado por scorecard + UI web de timeline/melhorias.
 - **v6.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
 
 ---

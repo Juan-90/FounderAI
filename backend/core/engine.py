@@ -193,4 +193,28 @@ class MissionEngine:
                 artifacts_path=report.artifacts_path, created_at=_now(),
             )
 
+        if mode == "improve":
+            from backend.core.improve.pipeline import ImprovePipeline
+            from backend.domain.improve import ImproveRequest
+            if not request.project_id:
+                return InteractionResponse(
+                    mission_id="n/a", status="failed", mode=mode,
+                    summary="IMPROVE exige project_id no payload.",
+                    artifacts_path="", created_at=datetime.now(timezone.utc),
+                )
+            pipe = ImprovePipeline(config=self._config)
+            res = await pipe.execute(ImproveRequest(
+                project_id=request.project_id,
+                goal=request.prompt or None,
+                max_files_touched=self._config.IMPROVE_MAX_FILES_TOUCHED,
+            ))
+            return InteractionResponse(
+                mission_id=res.report_path or "improve",
+                status="completed" if res.success else "failed",
+                mode=mode,
+                summary=("AGUARDANDO CONFIRMAÇÃO: " if res.waiting_human else "") + res.summary,
+                artifacts_path=res.report_path or "",
+                created_at=datetime.now(timezone.utc),
+            )
+
         raise ValueError(f"target_mode não suportado: {mode}")

@@ -134,8 +134,7 @@ class ImprovePipeline:
         vid = uuid.uuid4().hex
 
         # 3 — Gate humano (interrompe ANTES de modificar)
-        interrupt = (plan.requires_confirmation and not request.auto_apply) or \
-            plan.overall_risk in ("medium", "high")
+        interrupt = plan.requires_confirmation and not request.auto_apply
         if interrupt:
             draft = self._save_text(
                 memory.project_id, "reports", f"improve_plan_draft_{vid}.md",

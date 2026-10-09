@@ -64,7 +64,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--type", default=None, dest="project_type",
                         choices=["WEB_APP", "INTERNAL_SYSTEM", "GAME"], metavar="TIPO")
     parser.add_argument("--project", default=None, dest="project_id", metavar="ID",
-                        help="Vincula a missão à memória do projeto (v5.3).")
+                        help="Vincula a missão à memória do projeto (v5.3).")    
+    parser.add_argument("--goal", default=None, dest="goal", metavar="TEXTO",
+                        help="IMPROVE: novo goal do projeto.")
+    
     parser.add_argument("--auto-build", action="store_true", dest="auto_build")
     parser.add_argument("--no-confirm", action="store_true", dest="no_confirm")
     parser.add_argument("--no-build", action="store_true", dest="no_build")
@@ -514,6 +517,17 @@ async def main() -> None:
     if args.mission == "golden-missions":
         from backend.golden.cli import run_golden_mode
         sys.exit(await run_golden_mode())
+
+            # ── IMPROVE (v5.4.0) ──
+    if args.mission == "improve":
+        from backend.cli import run_improve_mode
+        if not args.project_id:
+            _exit_error("IMPROVE exige --project <project_id>.")
+        code = await run_improve_mode(
+            args.project_id, goal=args.goal,
+            auto_apply=args.auto_apply, no_confirm=args.no_confirm,
+        )
+        sys.exit(code)
 
     # ── COUNCIL (default) ──
     if args.last or args.rerun:

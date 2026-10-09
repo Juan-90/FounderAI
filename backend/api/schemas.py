@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 SourceLiteral = Literal["cli", "web", "mobile", "voice"]
 TargetModeLiteral = Literal[
-    "discover", "validate", "build", "validate_and_build", "self_audit", "golden"
+    "discover", "validate", "build", "validate_and_build", "self_audit", "golden", "improve"
 ]
 ResponseStatusLiteral = Literal["pending", "running", "completed", "failed"]
 HealthStatusLiteral = Literal["healthy", "degraded"]

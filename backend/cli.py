@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -179,6 +179,84 @@ def main(args: list[str]) -> int:
         return cmd_artifacts(args[1])
     console.print(f"[red]Subcomando desconhecido: {cmd}[/red]")
     return 1
+
+
+# ─────────────────────────────────────────
+# v5.4 — modo IMPROVE
+# ─────────────────────────────────────────
+
+def _render_improve(result: Any) -> None:
+    from rich.table import Table as _Table
+    d = result.diagnosis
+    console.print()
+    console.print(Panel(
+        f"[bold]Resumo:[/bold] {d.summary}\n[bold]Risco:[/bold] {d.risk_level}",
+        title="[bold cyan]🔧 Diagnóstico IMPROVE[/bold cyan]", border_style="cyan", padding=(1, 2),
+    ))
+    if d.top_issues:
+        console.print("[bold]Issues:[/bold]")
+        for i in d.top_issues[:6]:
+            console.print(f"  • {i}")
+    t = _Table(title="Plano de Melhoria", show_header=True, header_style="bold magenta",
+               border_style="dim", padding=(0, 1))
+    t.add_column("#", justify="right", style="dim")
+    t.add_column("Ação", min_width=34)
+    t.add_column("Risco", justify="center")
+    t.add_column("Impacto esperado", min_width=30)
+    for i, it in enumerate(result.plan.items, 1):
+        t.add_row(str(i), it.title, it.risk_level, it.expected_impact)
+    console.print(t)
+    status = ("[yellow]WAITING_HUMAN[/yellow]" if result.waiting_human
+              else "[green]SUCCESS[/green]" if result.success
+              else "[red]ESCALATED[/red]" if result.escalated
+              else "[red]FAILED[/red]")
+    console.print(f"\n[bold]Status:[/bold] {status} — {result.summary}")
+    if result.changed_files:
+        console.print(f"[dim]Arquivos alterados:[/dim] {', '.join(result.changed_files)}")
+
+
+async def run_improve_mode(
+    project_id: str,
+    goal: Optional[str] = None,
+    auto_apply: bool = False,
+    no_confirm: bool = False,
+    config: Optional[Settings] = None,
+) -> int:
+    from backend.core.improve.patcher import ImprovePatcher, ImproveQualityRunner
+    from backend.core.improve.pipeline import ImprovePipeline
+    from backend.domain.improve import ImproveRequest
+
+    cfg = config if config is not None else settings
+    if not cfg.IMPROVE_MODE_ENABLED:
+        console.print("[red]IMPROVE desabilitado (IMPROVE_MODE_ENABLED=false).[/red]")
+        return 1
+
+    store = _get_store(cfg)
+    pipe = ImprovePipeline(
+        store=store, config=cfg,
+        patcher=ImprovePatcher(),
+        quality_runner=ImproveQualityRunner(),
+    )
+    request = ImproveRequest(
+        project_id=project_id, goal=goal,
+        require_human_confirmation=not no_confirm,
+        auto_apply=auto_apply,
+        max_files_touched=cfg.IMPROVE_MAX_FILES_TOUCHED,
+    )
+    result = await pipe.execute(request)
+    _render_improve(result)
+
+    if result.waiting_human:
+        answer = console.input("\n[bold yellow]Aplicar patch? [y/N]:[/bold yellow] ").strip().lower()
+        if answer in ("y", "yes"):
+            approved = request.model_copy(update={
+                "require_human_confirmation": False, "auto_apply": True})
+            result = await pipe.execute(approved)
+            _render_improve(result)
+        else:
+            console.print("[dim]Aplicação cancelada; plano mantido como rascunho.[/dim]")
+            return 0
+    return 0 if result.success else 1
 
 
 if __name__ == "__main__":

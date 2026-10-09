@@ -335,4 +335,55 @@ aprendizados e versões de artefatos ao longo de múltiplas missões.
 - IMPROVE Mode / auto-refinamento a partir de learnings (v5.4.0).
 - UI web de timeline de projeto.
 
+# ADR-022 — IMPROVE Mode & Auto-refinement with Project Memory (v5.4.0)
+
+* **Data:** 10/10/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+A v5.3 entregou memória de projeto, mas nada *agia* sobre ela: falhas de QA e
+riscos acumulados não geravam correções. Faltava fechar o loop de refinamento:
+diagnosticar a memória, planejar melhorias, aplicá-las com segurança e
+re-validar em sandbox.
+
+## Decisão
+1. **Contratos (1/4):** `ImproveRequest/Diagnosis/PlanItem/Plan/Result`;
+   `ProjectMode.IMPROVE`.
+2. **Diagnoser (1/4):** determinístico (sem LLM): falhas recorrentes por
+   contagem de mensagem, learnings QA/risco citados explicitamente, gap de
+   goal, versões mais recentes de artefatos-chave; risco low/medium/high.
+3. **Planner (2/4):** mapeia categorias do diagnóstico em 1–7 itens objetivos;
+   `overall_risk` = pior entre diagnóstico e itens; confirmação humana se
+   medium/high ou `require_human_confirmation`.
+4. **Patcher + Quality (2/4):** `ImprovePatcher` com generator injetável
+   (Protocol) e limite ESTRITO `max_files_touched` (trava + truncated);
+   `ImproveQualityRunner` reutiliza `StaticAnalysisGate` + `TDDLoop` (sandbox);
+   falha após `IMPROVE_MAX_RETRIES` -> `escalated=True` + motivo.
+5. **Pipeline (3/4):** `ImprovePipeline.execute()`: load memory → diagnose →
+   plan → gate humano (`waiting_human`, rascunho do plano, interrompe antes de
+   modificar) → patch → quality → relatório em
+   `projects/<id>/versions/reports/improve_<vid>.md`. Sucesso: evento IMPROVED
+   + versões (code_bundle/relatório/tdd) + learnings (correção→impacto).
+   Falha: BUILD_FAILED/ESCALATED + learning do erro.
+6. **CLI/REST (4/4):** `python main.py improve --project <id> [--goal]
+   [--auto-apply] [--no-confirm]` com tabela Rich e confirmação `[y/N]`;
+   `mode:"improve"` no `/api/v1/interact` + atalho
+   `POST /api/v1/projects/{id}/improve`. Config: `IMPROVE_MODE_ENABLED`,
+   `IMPROVE_MAX_FILES_TOUCHED`, `IMPROVE_MAX_RETRIES`.
+
+## Consequências
+- Positivas: loop de refinamento fechado (memória → ação → re-validação);
+  segurança (gate humano + limite de arquivos + sandbox); auditoria completa.
+- Negativas: sem generator LLM default, o patch é no-op em produção (patches
+  reais exigem generator injetado, análogo aos evidence providers).
+
+## Alternativas rejeitadas
+- Auto-apply incondicional (risco inaceitável sem gate humano/sandbox).
+- LLM embutido no patcher (acopla e quebra determinismo dos testes).
+
+## Fora de escopo (v5.4.0)
+- Generator LLM de patches plugável por provider (v5.5).
+- Auto-refinamento agendado (trigger automático por scorecard).
+
 *Fim do arquivo único de governança. Novas ADRs são anexadas ao final.*
