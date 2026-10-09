@@ -200,8 +200,6 @@ Variáveis: `IMPROVE_MODE_ENABLED`, `IMPROVE_MAX_FILES_TOUCHED` (limite estrito
 de arquivos por melhoria), `IMPROVE_MAX_RETRIES` (retries do TDD antes de
 escalar). Ver **ADR-022**.
 
-## ⚠️ Limitações Honestas (v5.2.1)
-
 ## ⚠️ Estado da Baseline v5.5.0 & Limitações Reais
 
 **Baseline consolidada (selada em v5.5.0):** v5.0 GA (núcleo + Golden Missions)
