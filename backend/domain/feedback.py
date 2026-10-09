@@ -14,8 +14,7 @@ from pydantic import BaseModel, Field
 
 class ProjectFeedbackRequest(BaseModel):
     """Pedido de registro de feedback humano sobre um projeto."""
-
-    project_id: str
+    project_id: Optional[str] = None
     rating: Optional[int] = Field(default=None, ge=1, le=5)
     note: Optional[str] = Field(default=None, max_length=2000)
     tags: list[str] = Field(default_factory=list)

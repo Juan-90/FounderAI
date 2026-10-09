@@ -154,6 +154,38 @@ def cmd_artifacts(project_id: str, config: Optional[Settings] = None) -> int:
     return 0
 
 
+def cmd_feedback(
+    project_id: str,
+    rating: Optional[int] = None,
+    note: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+    mission: Optional[str] = None,
+    config: Optional[Settings] = None,
+) -> int:
+    """Registra feedback humano (OBSERVE) na Project Memory."""
+    from backend.core.memory.feedback_service import FeedbackService
+    from backend.domain.feedback import ProjectFeedbackRequest
+
+    cfg = config if config is not None else settings
+    store = _get_store(cfg)
+    svc = FeedbackService(config=cfg)
+    result = svc.record_feedback(store, ProjectFeedbackRequest(
+        project_id=project_id, rating=rating, note=note,
+        tags=tags or [], mission_id=mission,
+    ))
+    if not result.accepted:
+        console.print(f"[red]Feedback não registrado:[/red] {result.summary}")
+        return 1
+    console.print(Panel(
+        f"[bold]Resumo:[/bold] {result.summary}\n"
+        f"[dim]learning_id:[/dim] {result.learning_id}\n"
+        f"[dim]event_id:[/dim] {result.event_id}\n"
+        "[green]Feedback integrado à Project Memory.[/green]",
+        title="[bold green]👁 Feedback registrado (OBSERVE)[/bold green]",
+        border_style="green", padding=(1, 2),
+    ))
+    return 0
+
 def main(args: list[str]) -> int:
     """Entry point do subcomando `project`."""
     if not args:

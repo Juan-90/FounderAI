@@ -1,8 +1,8 @@
 """
-Fundador IA v5.3.0 — CLI Principal.
+Fundador IA v5.5.0 — CLI Principal.
 
 Modos: council (default), build, validate, validate-and-build, self-audit,
-discover, golden-missions, project (v5.3).
+discover, golden-missions, project (v5.3 + feedback v5.5), improve (v5.4).
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ _CANCEL_TOKENS: frozenset[str] = frozenset({"cancel", "abort", "/cancel"})
 class _RichHelpFormatter(argparse.HelpFormatter):
     def format_help(self) -> str:
         return (
-            "\n  🏛  Fundador IA v5.3.0 — AI Project Operating System\n"
+            "\n  🏛  Fundador IA v5.5.0 — AI Project Operating System\n"
             "  ─────────────────────────────────────────────────────\n\n"
             + super().format_help()
             + "\n  Exemplos:\n"
@@ -40,22 +40,24 @@ class _RichHelpFormatter(argparse.HelpFormatter):
             "    python main.py project show <id>\n"
             "    python main.py project timeline <id>\n"
             "    python main.py project artifacts <id>\n"
+            "    python main.py project feedback <id> --rating 5 --note \"ótimo\"\n"
+            "    python main.py improve --project <id>\n"
         )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python main.py",
-        description="Avalia, descobre, valida, constrói, audita e regressa missões.",
+        description="Avalia, descobre, valida, constrói, audita, melhora e observa missões.",
         formatter_class=_RichHelpFormatter,
     )
     parser.add_argument("mission", nargs="?", default=None,
                         help="'build'|'validate'|'validate-and-build'|'self-audit'|"
-                             "'discover'|'golden-missions'|'project'| ou texto da missão.")
+                             "'discover'|'golden-missions'|'project'|'improve'| ou texto da missão.")
     parser.add_argument("build_intent", nargs="?", default=None,
                         help="Intent/tema (build/validate/.../discover) ou action do project.")
     parser.add_argument("project_target", nargs="?", default=None,
-                        help="PROJECT: id do projeto p/ show/timeline/artifacts.")
+                        help="PROJECT: id do projeto p/ show/timeline/artifacts/feedback.")
 
     parser.add_argument("-f", "--file", action="append", dest="files", default=[],
                         metavar="ARQUIVO", help="Arquivo de contexto (repetível).")
@@ -64,10 +66,17 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--type", default=None, dest="project_type",
                         choices=["WEB_APP", "INTERNAL_SYSTEM", "GAME"], metavar="TIPO")
     parser.add_argument("--project", default=None, dest="project_id", metavar="ID",
-                        help="Vincula a missão à memória do projeto (v5.3).")    
+                        help="Vincula a missão à memória do projeto (v5.3).")
     parser.add_argument("--goal", default=None, dest="goal", metavar="TEXTO",
                         help="IMPROVE: novo goal do projeto.")
-    
+    parser.add_argument("--rating", type=int, default=None, choices=[1, 2, 3, 4, 5],
+                        help="PROJECT feedback: nota 1-5.")
+    parser.add_argument("--note", default=None, help="PROJECT feedback: nota textual.")
+    parser.add_argument("--tags", default=None,
+                        help="PROJECT feedback: tags separadas por vírgula.")
+    parser.add_argument("--mission", default=None, dest="mission_id",
+                        help="PROJECT feedback: mission_id de origem.")
+
     parser.add_argument("--auto-build", action="store_true", dest="auto_build")
     parser.add_argument("--no-confirm", action="store_true", dest="no_confirm")
     parser.add_argument("--no-build", action="store_true", dest="no_build")
@@ -98,13 +107,14 @@ def _interactive_menu() -> argparse.Namespace:
     ns = argparse.Namespace(
         mission=None, build_intent=None, project_target=None, files=[], history=False,
         history_limit=5, last=False, rerun=None, project_name=None, project_type=None,
-        project_id=None, no_build=False, auto_build=False, no_confirm=False,
+        project_id=None, goal=None, rating=None, note=None, tags=None, mission_id=None,
+        no_build=False, auto_build=False, no_confirm=False,
         no_validate=False, no_vab=False, max_per_mode=3, max_opportunities=8,
         handoff_id=None, no_evidence=False, evidence_provider=None,
     )
     console.print()
     console.print(Panel(
-        "[bold cyan]Fundador IA v5.3.0[/bold cyan] — AI Project Operating System\n\n"
+        "[bold cyan]Fundador IA v5.5.0[/bold cyan] — AI Project Operating System\n\n"
         "  [bold][1][/bold]  Nova Missão (deliberação)\n"
         "  [bold][2][/bold]  Reexecutar Última\n"
         "  [bold][3][/bold]  Ver Histórico\n"
@@ -247,7 +257,7 @@ def _render_header(mission: str, included_files: list[str]) -> None:
     console.print(Panel(
         f"[bold white]Conselho Consultivo Artificial[/bold white]\n\n"
         f"[dim]Missão:[/dim]\n[italic]{mission}[/italic]{ctx}",
-        title="[bold cyan]🏛  Fundador IA v5.3.0[/bold cyan]", border_style="cyan", padding=(1, 2),
+        title="[bold cyan]🏛  Fundador IA v5.5.0[/bold cyan]", border_style="cyan", padding=(1, 2),
     ))
     console.print()
 
@@ -445,10 +455,21 @@ async def main() -> None:
         _show_history(args.history_limit)
         sys.exit(0)
 
-    # ── PROJECT (v5.3.0) ──
+    # ── PROJECT (v5.3.0 + feedback v5.5.0) ──
     if args.mission == "project":
+        action = args.build_intent or "list"
+        if action == "feedback":
+            if not args.project_target:
+                _exit_error("Uso: project feedback <project_id> [--rating N] "
+                            "[--note '...'] [--tags a,b] [--mission id]")
+            from backend.cli import cmd_feedback
+            sys.exit(cmd_feedback(
+                args.project_target, rating=args.rating, note=args.note,
+                tags=[t.strip() for t in (args.tags or "").split(",") if t.strip()],
+                mission=args.mission_id,
+            ))
         from backend.cli import main as _project_cli
-        cli_args = [args.build_intent or "list"]
+        cli_args = [action]
         if args.project_target:
             cli_args.append(args.project_target)
         sys.exit(_project_cli(cli_args))
@@ -518,7 +539,7 @@ async def main() -> None:
         from backend.golden.cli import run_golden_mode
         sys.exit(await run_golden_mode())
 
-            # ── IMPROVE (v5.4.0) ──
+    # ── IMPROVE (v5.4.0) ──
     if args.mission == "improve":
         from backend.cli import run_improve_mode
         if not args.project_id:

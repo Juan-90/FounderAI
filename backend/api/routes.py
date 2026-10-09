@@ -1,5 +1,5 @@
 """
-Rotas REST da API FounderAI (v5.1 + v5.2 evidence + v5.3 projects).
+Rotas REST da API FounderAI (v5.1 + v5.2 evidence + v5.3 projects + v5.5 feedback).
 
 Segurança: mission_id/file_name sanitizados contra path traversal (400 em '..').
 """
@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.api.schemas import HealthResponse, InteractionRequest, InteractionResponse
 from backend.core.config import Settings
 from backend.core.engine import API_VERSION, MissionEngine
+from backend.domain.feedback import ProjectFeedbackRequest, ProjectFeedbackResult
 from backend.domain.memory_store import DiskProjectMemoryStore
 
 router = APIRouter()
@@ -200,7 +201,10 @@ async def get_timeline(project_id: str, config: Settings = Depends(get_config)) 
     memory = store.get(project_id)
     if memory is None:
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
-    return [e.model_dump(mode="json") for e in memory.events]
+    return [
+        {**e.model_dump(mode="json"), "display": f"{e.type.value}: {e.message}"}
+        for e in memory.events
+    ]
 
 
 @router.get("/api/v1/projects/{project_id}/artifacts")
@@ -213,6 +217,7 @@ async def get_project_artifacts(
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
     return [v.model_dump(mode="json") for v in memory.artifact_versions]
 
+
 @router.post("/api/v1/projects/{project_id}/improve")
 async def improve_project(
     project_id: str,
@@ -222,7 +227,6 @@ async def improve_project(
     from backend.core.improve.patcher import ImprovePatcher, ImproveQualityRunner
     from backend.core.improve.pipeline import ImprovePipeline
     from backend.domain.improve import ImproveRequest
-    from backend.domain.memory_store import DiskProjectMemoryStore
 
     if not config.IMPROVE_MODE_ENABLED:
         raise HTTPException(status_code=400, detail="IMPROVE desabilitado.")
@@ -240,3 +244,21 @@ async def improve_project(
         max_files_touched=config.IMPROVE_MAX_FILES_TOUCHED,
     ))
     return result.model_dump(mode="json")
+
+
+@router.post(
+    "/api/v1/projects/{project_id}/feedback",
+    response_model=ProjectFeedbackResult,
+)
+async def post_feedback(
+    project_id: str,
+    payload: ProjectFeedbackRequest,
+    config: Settings = Depends(get_config),
+) -> ProjectFeedbackResult:
+    """Registra feedback humano (OBSERVE) na Project Memory."""
+    from backend.core.memory.feedback_service import FeedbackService
+
+    store = DiskProjectMemoryStore(base_dir=Path(config.PROJECT_MEMORY_DIR))
+    svc = FeedbackService(config=config)
+    request = payload.model_copy(update={"project_id": project_id})
+    return svc.record_feedback(store, request)

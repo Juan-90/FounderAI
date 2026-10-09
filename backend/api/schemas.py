@@ -9,6 +9,11 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from backend.domain.feedback import (  # re-export p/ contratos da API (v5.5.0)
+    ProjectFeedbackRequest,
+    ProjectFeedbackResult,
+)
+
 SourceLiteral = Literal["cli", "web", "mobile", "voice"]
 TargetModeLiteral = Literal[
     "discover", "validate", "build", "validate_and_build", "self_audit", "golden", "improve"
