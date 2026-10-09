@@ -1,10 +1,10 @@
 """
-ImprovePlanner — diagnóstico → plano de melhoria (v5.4.0).
+ImprovePlanner — diagnóstico → plano de melhoria (v5.5.0).
 
 Determinístico (sem LLM): mapeia categorias do ImproveDiagnosis em itens de
-ação objetivos (bugs, testes, alinhamento de requisitos). Gera de 1 a 7 itens.
-Confirmação humana obrigatória se risco global medium/high OU se o pedido
-exigir (require_human_confirmation).
+ação objetivos. Observações humanas (OBSERVE) têm mapeamento próprio e
+prioridade. Gera de 1 a 7 itens. Confirmação humana obrigatória se risco
+medium/high OU se o pedido exigir (require_human_confirmation).
 """
 
 from __future__ import annotations
@@ -26,7 +26,15 @@ class ImprovePlanner:
         items: list[ImprovePlanItem] = []
 
         for issue in diagnosis.top_issues:
-            if issue.startswith("QA:"):
+            if issue.startswith("Observação humana:"):
+                items.append(ImprovePlanItem(
+                    title=f"Corrigir observação humana: "
+                          f"{issue[len('Observação humana:'):].strip()[:60]}",
+                    rationale="Feedback humano registrado via OBSERVE na memória do projeto.",
+                    expected_impact="Observação do fundador endereçada na próxima build.",
+                    risk_level="medium",
+                ))
+            elif issue.startswith("QA:"):
                 items.append(ImprovePlanItem(
                     title=f"Corrigir falha de QA: {issue[3:].strip()[:60]}",
                     rationale="Learning de QA da memória indica defeito recorrente.",

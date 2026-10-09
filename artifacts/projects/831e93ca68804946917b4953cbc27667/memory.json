@@ -1,0 +1,81 @@
+{
+  "project_id": "831e93ca68804946917b4953cbc27667",
+  "name": "SmokeProject",
+  "project_type": null,
+  "deployment_strategy": null,
+  "current_goal": null,
+  "status": "active",
+  "events": [
+    {
+      "event_id": "a508327b6efa4ac0806881722c75d4bd",
+      "type": "observed",
+      "mission_id": null,
+      "message": "Feedback observado (rating=5)",
+      "data": {
+        "rating": 5,
+        "tags": [
+          "smoke"
+        ]
+      },
+      "created_at": "2026-10-09T10:19:17.596743Z"
+    },
+    {
+      "event_id": "e0d55828aab04c7fa6d3819e22bd7e88",
+      "type": "improved",
+      "mission_id": "8dd8b9f6565141bdb80831cff6708ece",
+      "message": "Melhoria aplicada (0 arquivo(s))",
+      "data": {},
+      "created_at": "2026-10-09T10:19:17.643477Z"
+    }
+  ],
+  "decisions": [],
+  "artifact_versions": [
+    {
+      "version_id": "88539807c88d488cbf06bceb2a87ac24",
+      "kind": "code_bundle",
+      "path": "artifacts\\projects\\831e93ca68804946917b4953cbc27667\\versions\\code_bundle\\code_bundle_8dd8b9f6565141bdb80831cff6708ece.json",
+      "checksum": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "mission_id": "8dd8b9f6565141bdb80831cff6708ece",
+      "created_at": "2026-10-09T10:19:17.664999Z",
+      "summary": "code bundle pós-melhoria"
+    },
+    {
+      "version_id": "f88f6859de4841ebb8142dfc9721e093",
+      "kind": "composite_report",
+      "path": "artifacts\\projects\\831e93ca68804946917b4953cbc27667\\versions\\reports\\improve_8dd8b9f6565141bdb80831cff6708ece.md",
+      "checksum": "25974679ac808065bfb8ce00abd707299c79015e58d523f3b2a79cbfe6982c0a",
+      "mission_id": "8dd8b9f6565141bdb80831cff6708ece",
+      "created_at": "2026-10-09T10:19:17.684001Z",
+      "summary": "relatório improve"
+    },
+    {
+      "version_id": "abe3d8d168234919a81fbb7b37eec232",
+      "kind": "test_report",
+      "path": "artifacts\\projects\\831e93ca68804946917b4953cbc27667\\versions\\reports\\tdd_8dd8b9f6565141bdb80831cff6708ece.md",
+      "checksum": "930b1768b4439d4ee19b4831c329823d98b62dcd5459bc6d0e662e950ef46c5b",
+      "mission_id": "8dd8b9f6565141bdb80831cff6708ece",
+      "created_at": "2026-10-09T10:19:17.703290Z",
+      "summary": "tdd pós-melhoria"
+    }
+  ],
+  "evidence_refs": [],
+  "learnings": [
+    {
+      "learning_id": "2783c751309e49adb5ddd70740cf1fde",
+      "text": "Feedback humano: rating=5 tags=[smoke] — smoke ok",
+      "source": "human_feedback",
+      "mission_id": null,
+      "created_at": "2026-10-09T10:19:17.582450Z"
+    },
+    {
+      "learning_id": "e07ed4beea574377b9a85af2d3389880",
+      "text": "Corrigir observação humana: Feedback humano: rating=5 tags=[smoke] — smoke ok -> Observação do fundador endereçada na próxima build.",
+      "source": "other",
+      "mission_id": "8dd8b9f6565141bdb80831cff6708ece",
+      "created_at": "2026-10-09T10:19:17.724287Z"
+    }
+  ],
+  "tags": [],
+  "created_at": "2026-10-09T10:19:17.547679Z",
+  "updated_at": "2026-10-09T10:19:17.724287Z"
+}

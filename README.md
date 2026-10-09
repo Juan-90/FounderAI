@@ -202,36 +202,45 @@ escalar). Ver **ADR-022**.
 
 ## ⚠️ Limitações Honestas (v5.2.1)
 
-- **Relevância lexical:** `score_relevance` usa Jaccard (proxy); embeddings/RAG
-  ficam para a v5.3.
-- **Cache 24h:** pode servir evidência levemente desatualizada (aceitável; bypass disponível).
-- **Render de jogos:** validação headless (camada de lógica); render real é local.
-- **Persistência:** artefatos em disco + SQLite local; sem dashboard web de evidências ainda.
+## ⚠️ Estado da Baseline v5.5.0 & Limitações Reais
+
+**Baseline consolidada (selada em v5.5.0):** v5.0 GA (núcleo + Golden Missions)
+· v5.1 Interaction Layer (REST+WS) · v5.2 Evidence Graph + providers reais +
+cache/dedup · v5.3 Project Memory · v5.4 IMPROVE Mode · v5.5 OBSERVE mínimo +
+smoke de release. **478 testes** passando; smoke 6/6.
+
+**Limitações reais (transparência):**
+- **Generator LLM de patches não plugado:** o `ImprovePatcher` opera via
+  generators injetáveis (Protocol); sem generator, o patch é no-op. Patches
+  reais por provider LLM chegam na v5.6.
+- **OBSERVE mínimo:** só feedback humano explícito (CLI/REST); sem telemetria
+  automática de uso.
+- **Memória apenas em disco:** `artifacts/projects/<id>/memory.json` (atômico);
+  backends sqlite/redis adiados.
+- **Sem UI web** de timeline/melhorias (Streamlit cobre missões, não memória).
+- **Smoke in-process:** não sobe servidor/Docker reais (propósito: checagem
+  rápida de release).
+- **Relevância lexical:** Jaccard em evidence; embeddings/RAG adiados.
+
 
 ---
 
+## 👁 Feedback Humano — OBSERVE (v5.5.0)
+
+Registre a observação do fundador diretamente na memória do projeto; ela vira
+aprendizado (`human_feedback`) + evento `OBSERVED` e **alimenta o IMPROVE**
+(diagnoser a cita primeiro; planner gera item de correção).
+
+```bash
+python main.py project feedback <project_id> --rating 4 --note "UX ótima, mas lenta" --tags ux,perf
+python main.py project timeline <project_id>     # evento OBSERVED formatado
+
 ## 🗺 Roadmap
 
-- **v5.2.1 (atual)** — Evidence Hardening: Tavily/Serper, cache, dedup, métricas, ADR-020.
-- **v5.3.0** — UI de evidências (visualização do grafo) + auto-refinamento + embeddings/RAG.
-- **v6.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
-
-
-**B)** Roadmap atualizado:
-
-```markdown
-- **v5.3.0 (atual — GA)** — Project Memory & Versioning Loop: memória de projeto,
-  context compiler, hooks nos pipelines, CLI `project`, API REST de projetos.
-- **v5.4.0** — IMPROVE Mode & Auto-refinement: learnings alimentam re-builds
-  automáticos; UI web de timeline; backend de memória plugável (sqlite/redis).
-- **v6.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
-
-
-- **v5.4.0 (atual — GA)** — IMPROVE Mode & Auto-refinement: diagnose→plan→patch→
-  quality→apply com memória de projeto e gate humano.
-- **v5.5.0** — Generator LLM de patches plugável (providers) + auto-refinamento
-  agendado por scorecard + UI web de timeline/melhorias.
-- **v6.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
+- **v5.5.0 (atual — GA)** — OBSERVE mínimo + smoke de release + baseline v5.x selada.
+- **v5.6.0** — Generator LLM de patches plugável + auto-refinamento agendado +
+  UI web de timeline/melhorias + backend de memória plugável.
+- **v7.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
 
 ---
 

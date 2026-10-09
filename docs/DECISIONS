@@ -386,4 +386,54 @@ re-validar em sandbox.
 - Generator LLM de patches plugável por provider (v5.5).
 - Auto-refinamento agendado (trigger automático por scorecard).
 
+
+# ADR-023 — Consolidação da Baseline v5.x e Módulo OBSERVE Mínimo (v5.5.0)
+
+* **Data:** 11/10/2026
+* **Status:** APROVADO
+* **Participantes:** Juan (Project Lead), Gemini (Arquiteto), Qwen (Executor), Grok (Guardião do Tempo)
+
+## Contexto
+Após v5.0–v5.4 (GA, Interaction, Evidence, Memory, IMPROVE), o sistema produzia
+melhorias a partir de falhas de QA e riscos, mas **não** a partir da observação
+humana direta. Faltava o elo OBSERVE: capturar feedback do fundador e fazê-lo
+alimentar o loop de refinamento. Também faltava um smoke de release e a
+declaração transparente do estado da baseline.
+
+## Decisão
+1. **OBSERVE mínimo (1/4):** `ProjectFeedbackRequest/Result`; evento
+   `OBSERVED`; `FeedbackService.record_feedback` valida (rating OU note),
+   cria `MemoryLearning(source="human_feedback")` + evento `OBSERVED`,
+   persistindo atomicamente. Config: `OBSERVE_FEEDBACK_ENABLED`,
+   `OBSERVE_FEEDBACK_MAX_NOTE_CHARS`.
+2. **Prioridade no contexto (1/4):** `MemoryContextCompiler` coloca learnings
+   `human_feedback` primeiro (até 4) antes dos demais (até 2).
+3. **CLI/REST (2/4):** `python main.py project feedback <id> [--rating 1-5]
+   [--note] [--tags csv] [--mission]`; `POST /api/v1/projects/{id}/feedback`;
+   timeline com campo `display`.
+4. **OBSERVE→IMPROVE (4/4):** `ImproveDiagnoser` cita `human_feedback` em
+   `leveraged_learnings` e `top_issues` ("Observação humana: ...");
+   `ImprovePlanner` mapeia observações humanas em itens de correção (risk
+   medium). Feedback humano vira plano e patch.
+5. **Estabilização/Hardening/Smoke (3/4):** `add_artifact_version(created_at)`
+   opcional (testes determinísticos, sem sleep); friendly errors na CLI;
+   consistência `/health`+`/version`+`/interact(422)`; `scripts/smoke_release.py`
+   (6 passos, in-process, stubs) invocável via CLI (`main.py smoke`) ou direto.
+6. **Baseline selada:** tag `v5.5.0` consolida v5.0–v5.5 como baseline estável.
+
+## Consequências
+- Positivas: loop fechar com o humano no centro (observar→melhorar); smoke
+  dá confiança de release; baseline documentada e testada (478 testes).
+- Negativas: OBSERVE é mínimo (só feedback explícito; sem telemetria automática);
+  generator LLM de patches ainda não plugado (IMPROVE default aplica via
+  generators injetáveis).
+
+## Alternativas rejeitadas
+- Telemetria automática de uso como fonte de observação (privacidade/complexidade).
+- Smoke que sobe servidor real + Docker (lento e frágil em CI).
+
+## Fora de escopo (v5.5.0)
+- UI web de timeline/melhorias; backend de memória plugável (sqlite/redis);
+  auto-refinamento agendado por scorecard (v5.6+).
+
 *Fim do arquivo único de governança. Novas ADRs são anexadas ao final.*

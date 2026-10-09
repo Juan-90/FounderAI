@@ -1,12 +1,13 @@
 """
-ImproveDiagnoser — diagnóstico determinístico sobre a memória do projeto (v5.4.0).
+ImproveDiagnoser — diagnóstico determinístico sobre a memória do projeto (v5.5.0).
 
 Analisa:
   • eventos BUILD_FAILED / ESCALATED (falhas recorrentes por mensagem);
-  • learnings qa_failure / validation_risk (citados explicitamente);
+  • learnings **human_feedback (prioridade máxima)**, qa_failure e
+    validation_risk (citados explicitamente em leveraged_learnings e
+    espelhados em top_issues como "Observação humana:" / "QA:" / "Risco:");
   • gaps em relação ao goal informado vs current_goal;
-  • versões MAIS RECENTES dos artefatos-chave (requirements, architecture,
-    code_bundle, test_report) como base reutilizável.
+  • versões MAIS RECENTES dos artefatos-chave como base reutilizável.
 
 Sem LLM: heurísticas puras e reproduzíveis (mesma memória → mesmo diagnóstico).
 Classificação de risco:
@@ -58,10 +59,13 @@ class ImproveDiagnoser:
         if not recurring and failure_events:
             issues.append(f"Falha registrada: {failure_events[-1].message}")
 
-        # 2 — Learnings de QA e riscos (citação explícita)
+        # 2 — Learnings: human_feedback PRIMEIRO (OBSERVE alimenta o IMPROVE)
+        human = [l for l in project_memory.learnings if l.source == "human_feedback"]
         qa_learnings = [l for l in project_memory.learnings if l.source == "qa_failure"]
         risk_learnings = [l for l in project_memory.learnings if l.source == "validation_risk"]
-        leveraged_learnings = [l.text for l in qa_learnings + risk_learnings]
+        leveraged_learnings = [l.text for l in human + qa_learnings + risk_learnings]
+        for l in human:
+            issues.append(f"Observação humana: {l.text}")
         for l in qa_learnings:
             issues.append(f"QA: {l.text}")
         for l in risk_learnings[:3]:
@@ -105,8 +109,9 @@ class ImproveDiagnoser:
 
         summary = (
             f"Projeto '{project_memory.name}': {n_fail} falha(s), "
-            f"{len(qa_learnings)} learning(s) de QA, {n_risk} risco(s), "
-            f"{len(leveraged_artifacts)} artefato(s) reutilizável(is); risco {risk}."
+            f"{len(human)} observação(ões) humana(s), {len(qa_learnings)} learning(s) de QA, "
+            f"{n_risk} risco(s), {len(leveraged_artifacts)} artefato(s) reutilizável(is); "
+            f"risco {risk}."
         )
         return ImproveDiagnosis(
             summary=summary,
