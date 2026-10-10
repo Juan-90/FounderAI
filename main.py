@@ -94,6 +94,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-n", type=int, default=5, dest="history_limit")
     parser.add_argument("--last", action="store_true")
     parser.add_argument("--rerun", metavar="ID")
+    parser.add_argument("--clean", action="store_true", dest="clean",
+                        help="Remove artifacts e reseta memórias de teste.")
+    parser.add_argument("--all", action="store_true", dest="clean_all",
+                        help="Com --clean: inclui TODAS as raízes de artifacts.")
+    parser.add_argument("--dry-run", action="store_true", dest="clean_dry_run",
+                        help="Com --clean: apenas conta, não remove.")
     return parser
 
 
@@ -456,6 +462,23 @@ async def main() -> None:
 
     if args.history:
         _show_history(args.history_limit)
+        sys.exit(0)
+
+        # ── CLEAN (v5.5.4) ──
+    if args.clean:
+        from backend.core.cleanup import clean_all as _clean_all
+        from rich.table import Table as _Table
+        report = _clean_all(config=_app_settings, dry_run=args.clean_dry_run)
+        table = _Table(title="🧹 Limpeza de artifacts & memórias" +
+                       (" (dry-run)" if args.clean_dry_run else ""))
+        table.add_column("Item", min_width=24)
+        table.add_column("Qtd", justify="right")
+        table.add_row("Arquivos removidos", str(report.files_removed))
+        table.add_row("Diretórios removidos", str(report.dirs_removed))
+        table.add_row("Memórias resetadas", str(report.memories_reset))
+        console.print(table)
+        for w in report.warnings:
+            _print_warning(w)
         sys.exit(0)
 
     if getattr(args, "no_confirm", False):

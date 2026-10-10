@@ -1,14 +1,20 @@
 """
-LLM Client — FounderAI v4.3.0 (resiliência: retry/backoff + resposta vazia=fallback).
+LLM Client — FounderAI v5.5.4 (multi-gateway + fallback cloud-first em 429).
 
-Novidades deste hotfix:
-  • Retry com backoff exponencial para HTTP transitório (429/500/502/503/504)
-    ANTES de ativar o fallback de provedor (mitiga rate-limit do Groq).
-  • Resposta com content vazio é tratada como erro de provider (INVALID_JSON),
-    triggerando o fallback para o próximo da cadeia (antes retornava "" e
-    quebrava o complete_json sem fallback).
-  • Timeout por provedor: local usa LLM_LOCAL_TIMEOUT_SECONDS (>=120s, default 180s).
-  • Log detalhado de TODOS os provedores quando a cadeia inteira falha.
+v5.5.4:
+  • Tipos compartilhados (LLMErrorKind/LLMProviderError/LLMCallResult) movidos
+    p/ backend/core/llm_types.py (quebra ciclo llm_client <-> providers);
+    este módulo re-exporta tudo p/ retrocompatibilidade.
+  • LLM_PROVIDER_ORDER no .env define a ordem completa (ex: openrouter,
+    gemini, groq, local). O client itera por todos antes de falhar.
+  • 429 em provedor de nuvem -> pula IMEDIATAMENTE p/ o próximo cloud
+    (sem retry interno); 500/502/503/504 mantêm retry com backoff (v5.5.3).
+  • Providers modulares (OpenRouter/Gemini) delegados via _PROVIDER_FACTORIES.
+  • Providers legados (groq, local, openai, anthropic, mock) usam
+    _call_provider_verbose (comportamento inalterado p/ não quebrar testes).
+
+v5.5.3: retry/backoff em HTTP transitório + LLM_LOCAL_TIMEOUT_SECONDS=360.
+v4.3.0: retry com backoff + resposta vazia = trigger fallback.
 """
 
 from __future__ import annotations
@@ -16,52 +22,41 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Final
+from typing import Any, Callable, Final, cast, get_args
 
 import httpx
 from rich.console import Console
 
 from backend.core.config import ProviderName, Settings, settings
+from backend.core.llm_types import (  # noqa: F401  (re-export p/ retrocompat)
+    LLMCallResult,
+    LLMErrorKind,
+    LLMProviderError,
+    VerboseResponse,
+)
+from backend.core.providers import GeminiProvider, OpenRouterProvider
 from backend.utils.retry_policy import backoff_seconds
 
 console = Console(stderr=True)
 
 _CLOUD_MAX_TOKENS: int = 2048
 
-# Status HTTP transitórios que merecem retry com backoff (rate-limit/indisponibilidade)
+# Status HTTP transitórios que merecem retry com backoff (indisponibilidade)
 _RETRYABLE_STATUS: Final[frozenset[int]] = frozenset({429, 500, 502, 503, 504})
 
+# Providers que, ao receberem 429, pulam direto para o próximo (sem retry)
+_CLOUD_PROVIDERS: Final[frozenset[str]] = frozenset({
+    "openrouter", "gemini", "groq", "openai", "anthropic",
+})
 
-class LLMErrorKind(str, Enum):
-    UNAVAILABLE  = "UNAVAILABLE"
-    TIMEOUT      = "TIMEOUT"
-    INVALID_JSON = "INVALID_JSON"
-    HTTP_ERROR   = "HTTP_ERROR"
-
-
-class LLMProviderError(Exception):
-    def __init__(self, message: str, kind: LLMErrorKind) -> None:
-        super().__init__(message)
-        self.kind = kind
-
-    def __str__(self) -> str:
-        return f"[{self.kind.value}] {super().__str__()}"
+# v5.5.4 — nomes válidos de ProviderName (p/ filtrar LLM_PROVIDER_ORDER)
+_VALID_PROVIDERS: Final[frozenset[str]] = frozenset(get_args(ProviderName))
 
 
+# Aliases legados (Sprint 4) — mesmos símbolos, nomes antigos
 OllamaUnavailableError   = LLMProviderError
 OllamaTimeoutError       = LLMProviderError
 OllamaInvalidResponseError = LLMProviderError
-
-
-@dataclass(frozen=True)
-class LLMCallResult:
-    content: str
-    provider_used: ProviderName
-    model_used: str
-    fallback_triggered: bool = False
-    original_provider: ProviderName | None = None
 
 
 _JUROR_JSON_SCHEMA: str = """
@@ -71,12 +66,22 @@ O JSON deve seguir EXATAMENTE esta estrutura:
   "juror_name": "string",
   "score": 7.5,
   "verdict": "APPROVE",
-  "reasoning": "string com máximo 500 caracteres"
+  "reasoning": "string com máximo de 500 caracteres"
 }
 Valores válidos para verdict: "APPROVE" ou "VETO"
 """
 
 _JSON_OBJECT_RE = re.compile(r"\{(?:[^{}]|\{[^{}]*\})*\}", re.DOTALL)
+
+
+# ─────────────────────────────────────────
+# v5.5.4 — Registry de providers modulares
+# ─────────────────────────────────────────
+
+_PROVIDER_FACTORIES: dict[str, Callable[..., Any]] = {
+    "openrouter": OpenRouterProvider,
+    "gemini": GeminiProvider,
+}
 
 
 def _resolve_url() -> str:
@@ -230,7 +235,7 @@ async def call_ollama_json(
 
 
 class LLMClient:
-    """Cliente LLM agnóstico com fallback, retry/backoff e diagnósticos."""
+    """Cliente LLM agnóstico com multi-gateway, fallback cloud-first e retry/backoff."""
 
     def __init__(
         self,
@@ -239,6 +244,42 @@ class LLMClient:
     ) -> None:
         self._config: Settings = config if config is not None else settings
         self._transport: httpx.AsyncBaseTransport | None = transport
+
+    # ─────────────────────────────────────────
+    # v5.5.4 — Ordem dinâmica de providers
+    # ─────────────────────────────────────────
+
+    def _provider_order(self, role: str | None = None) -> list[ProviderName]:
+        """
+        Ordem de providers com retrocompatibilidade (v5.5.4):
+
+        • Modo legado (LLM_PROVIDER_ORDER vazio/default): usa [PRIMARY, FALLBACK]
+          preservando o comportamento dos 500+ testes legados.
+        • Modo novo (LLM_PROVIDER_ORDER explícito no .env): usa a ordem
+          declarada, com PRIMARY_PROVIDER (ou override por papel) como primeiro.
+
+        Override por papel (architect/security) sempre tem precedência sobre
+        o PRIMARY quando role é passado.
+        """
+        raw = getattr(self._config, "LLM_PROVIDER_ORDER", None) or ""
+        explicit_names = [p.strip() for p in raw.split(",") if p.strip()]
+
+        override = self._role_override(role) if role is not None else None
+
+        # ── Modo legado: cadeia [PRIMARY, FALLBACK] ──
+        if not explicit_names:
+            primary = override or self.resolve_provider(role)
+            fallback = self._config.FALLBACK_PROVIDER
+            if primary == fallback:
+                return [primary]
+            return [primary, fallback]
+
+        # ── Modo novo: ordem explícita via .env ──
+        names = [p for p in explicit_names if p in _VALID_PROVIDERS]
+        first = override or self._config.PRIMARY_PROVIDER
+        if first in names:
+            names = [first] + [p for p in names if p != first]
+        return [cast(ProviderName, p) for p in names]
 
     def resolve_provider(self, role: str | None = None) -> ProviderName:
         if role is not None:
@@ -259,23 +300,39 @@ class LLMClient:
         return overrides.get(normalized)
 
     def _provider_chain(self, role: str | None = None) -> list[ProviderName]:
-        primary = self.resolve_provider(role)
-        fallback = self._config.FALLBACK_PROVIDER
-        if fallback == primary:
-            return [primary]
-        return [primary, fallback]
+        return self._provider_order(role)
 
     async def complete(self, system_prompt, user_prompt, model=None, role=None) -> str:
         result = await self.complete_verbose(system_prompt, user_prompt, model, role)
         return result.content
 
     async def complete_verbose(self, system_prompt, user_prompt, model=None, role=None) -> LLMCallResult:
-        chain = self._provider_chain(role)
-        original_provider: ProviderName = chain[0]
+        chain = self._provider_order(role)
+        original_provider: ProviderName = chain[0] if chain else "local"  # type: ignore[assignment]
         errors: list[tuple[ProviderName, LLMProviderError]] = []
 
         for index, provider in enumerate(chain):
             try:
+                # v5.5.4: providers modulares (OpenRouter/Gemini) via factory
+                if provider in _PROVIDER_FACTORIES:
+                    factory = _PROVIDER_FACTORIES[provider]
+                    inst = factory(self._config, transport=self._transport)
+                    verbose = await inst.complete_verbose(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        model=model,
+                        role=role,
+                    )
+                    triggered = provider != original_provider
+                    return LLMCallResult(
+                        content=verbose.content,
+                        provider_used=provider,
+                        model_used=verbose.model_used,
+                        fallback_triggered=triggered,
+                        original_provider=original_provider if triggered else None,
+                    )
+
+                # Legacy: groq, local, openai, anthropic, mock
                 content, model_used = await self._call_provider_verbose(
                     provider, system_prompt, user_prompt, model
                 )
@@ -288,6 +345,13 @@ class LLMClient:
             except LLMProviderError as exc:
                 errors.append((provider, exc))
                 is_last = index == len(chain) - 1
+                status = getattr(exc, "status_code", None)
+                if status == 429 and provider in _CLOUD_PROVIDERS and not is_last:
+                    console.print(
+                        f"[yellow]⚠  {provider} retornou 429 (rate-limit). "
+                        f"Pulando p/ próximo provedor de nuvem...[/yellow]"
+                    )
+                    continue
                 if not is_last:
                     console.print(
                         f"[yellow]⚠  Provedor '{provider}' falhou ({exc.kind.value}). "
@@ -323,9 +387,7 @@ class LLMClient:
             )
         return parsed
 
-        # ── Aliases explícitos (v4.4.0) ─────────────────────────────────────────
-    # Deixam claro que complete/complete_json JÁ incluem fallback Cloud→Local,
-    # retry/backoff em HTTP transitório e timeout por provedor (local ≥ 120s).
+    # ── Aliases explícitos (v4.4.0) ─────────────────────────────────────────
     async def complete_with_fallback(
         self, system_prompt, user_prompt, model=None, role=None
     ) -> str:
@@ -340,6 +402,7 @@ class LLMClient:
         return httpx.AsyncClient(timeout=timeout, transport=self._transport)
 
     async def _call_provider_verbose(self, provider, system_prompt, user_prompt, model) -> tuple[str, str]:
+        """Chamada legada p/ providers não-modulares (groq, local, openai, etc.)."""
         api_key = self._config.api_key_for(provider)
         if provider != "local" and not api_key:
             raise LLMProviderError(
@@ -382,7 +445,6 @@ class LLMClient:
                     response.raise_for_status()
                     content = self._extract_content(provider, response)
                     if not content.strip():
-                        # Resposta vazia = falha do provider → trigger fallback
                         raise LLMProviderError(
                             f"Provedor '{provider}' retornou resposta vazia.",
                             kind=LLMErrorKind.INVALID_JSON,
@@ -391,8 +453,16 @@ class LLMClient:
 
             except httpx.HTTPStatusError as exc:
                 code = exc.response.status_code
+
+                # v5.5.4: 429 em cloud -> não faz retry; propaga com status_code
+                if code == 429 and provider in _CLOUD_PROVIDERS:
+                    raise LLMProviderError(
+                        f"Provedor '{provider}' retornou HTTP 429 (rate-limit).",
+                        kind=LLMErrorKind.HTTP_ERROR,
+                        status_code=429,
+                    ) from None
+
                 if code in _RETRYABLE_STATUS and attempt < max_retries:
-                    # v5.5.3: backoff exponencial unificado (base maior p/ 429)
                     delay = backoff_seconds(
                         attempt + 1,
                         status_code=code,
@@ -404,6 +474,7 @@ class LLMClient:
                     )
                     await asyncio.sleep(delay)
                     continue
+
                 hint = ""
                 if code == 404:
                     if provider == "local":
@@ -417,13 +488,11 @@ class LLMClient:
                             f"catálogo da sua chave. Ajuste {provider.upper()}_MODEL no .env."
                         )
                 elif code == 429:
-                    hint = (
-                        f"\nDica: 429 = rate-limit do '{provider}'. Aguarde ou reduza a "
-                        "frequência de chamadas; o fallback local será usado."
-                    )
+                    hint = f"\nDica: 429 = rate-limit do '{provider}'."
                 raise LLMProviderError(
                     f"Provedor '{provider}' retornou HTTP {code}.{hint}",
                     kind=LLMErrorKind.HTTP_ERROR,
+                    status_code=code,
                 ) from None
 
             except httpx.ConnectError:

@@ -11,7 +11,15 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ProviderName = Literal["groq", "openrouter", "openai", "local"]
+ProviderName = Literal[
+    "groq",
+    "local",
+    "openai",
+    "anthropic",
+    "mock",
+    "openrouter",   # v5.5.4
+    "gemini",       # v5.5.4
+]
 
 
 class Settings(BaseSettings):
@@ -36,6 +44,13 @@ class Settings(BaseSettings):
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+
+    # ── v5.5.4 — Provedores multi-gateway ──
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    LLM_PROVIDER_ORDER: str = ""
 
     # ── Modelos customizáveis (v4.0) ──
     GROQ_MODEL: str = "openai/gpt-oss-20b"
@@ -216,6 +231,7 @@ class Settings(BaseSettings):
         primary = self.PRIMARY_PROVIDER
         fallback = self.FALLBACK_PROVIDER
 
+        # ── Check de primary/fallback/roles (v4.x) ──────────────────────────
         if primary in ("groq", "openrouter", "openai"):
             key = self.api_key_for(primary)
             if not key or not key.strip():
@@ -248,6 +264,34 @@ class Settings(BaseSettings):
                         f"Override de '{role}' aponta para '{provider}' "
                         f"sem API key correspondente. Usará fallback."
                     )
+
+        # ── v5.5.4 — providers multi-gateway: só reclamar quando em uso ────
+        # Constrói o conjunto de providers ativos (primary + fallback + roles +
+        # LLM_PROVIDER_ORDER) e só emite warning de chave ausente se o provider
+        # estiver em uso. Evita falso positivo quando primary=local e o usuário
+        # não configurou openrouter/gemini.
+        active: set[str] = set()
+        if primary:
+            active.add(primary)
+        if fallback:
+            active.add(fallback)
+        for provider in role_map.values():
+            if provider:
+                active.add(provider)
+        order_raw = getattr(self, "LLM_PROVIDER_ORDER", "") or ""
+        for p in order_raw.split(","):
+            p = p.strip()
+            if p:
+                active.add(p)
+
+        if "openrouter" in active and not self.OPENROUTER_API_KEY:
+            warnings.append(
+                "OPENROUTER_API_KEY ausente — provider 'openrouter' indisponível."
+            )
+        if "gemini" in active and not self.GEMINI_API_KEY:
+            warnings.append(
+                "GEMINI_API_KEY ausente — provider 'gemini' indisponível."
+            )
 
         return warnings
 
