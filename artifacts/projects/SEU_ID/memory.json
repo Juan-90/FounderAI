@@ -21,6 +21,25 @@
       "message": "Validação concluída (FAILED)",
       "data": {},
       "created_at": "2026-10-09T23:42:00.134327Z"
+    },
+    {
+      "event_id": "2a5b887ca6374ee981272eddbdf46794",
+      "type": "validated",
+      "mission_id": "f734a61bf6e44cb986ba6662ebaac83c",
+      "message": "Validação concluída (COMPLETED)",
+      "data": {},
+      "created_at": "2026-10-10T10:24:26.152683Z"
+    },
+    {
+      "event_id": "42996955c9e74e618ea49d12562cf4f1",
+      "type": "observed",
+      "mission_id": null,
+      "message": "Feedback observado (rating=4)",
+      "data": {
+        "rating": 4,
+        "tags": []
+      },
+      "created_at": "2026-10-10T10:25:14.954546Z"
     }
   ],
   "decisions": [],
@@ -42,11 +61,21 @@
       "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
       "created_at": "2026-10-09T23:42:00.175606Z",
       "summary": null
+    },
+    {
+      "version_id": "44fbef4f71ce486b82269f002326068c",
+      "kind": "validation_report",
+      "path": "artifacts\\validate\\f734a61bf6e44cb986ba6662ebaac83c\\validation_report.md",
+      "checksum": "34e7e01714b32735ab6d8de613073b19560ba411a95a1649ee064d53bd9225b5",
+      "mission_id": "f734a61bf6e44cb986ba6662ebaac83c",
+      "created_at": "2026-10-10T10:24:26.198599Z",
+      "summary": null
     }
   ],
   "evidence_refs": [
     "artifacts\\validate\\218a036446a14e8cbdd5ae71b5ca3fe0\\evidence\\evidence_graph.json",
-    "artifacts\\validate\\5f4d19488d004410bf1a3492ebc0ad8e\\evidence\\evidence_graph.json"
+    "artifacts\\validate\\5f4d19488d004410bf1a3492ebc0ad8e\\evidence\\evidence_graph.json",
+    "artifacts\\validate\\f734a61bf6e44cb986ba6662ebaac83c\\evidence\\evidence_graph.json"
   ],
   "learnings": [
     {
@@ -90,9 +119,58 @@
       "source": "validation_risk",
       "mission_id": "5f4d19488d004410bf1a3492ebc0ad8e",
       "created_at": "2026-10-09T23:42:00.307099Z"
+    },
+    {
+      "learning_id": "e9e46c2dc29e4e1dbef6d0eafcf6aa49",
+      "text": "Market already crowded with generic scheduling tools that can add concurrency later",
+      "source": "validation_risk",
+      "mission_id": "f734a61bf6e44cb986ba6662ebaac83c",
+      "created_at": "2026-10-10T10:24:26.219688Z"
+    },
+    {
+      "learning_id": "eb5f422adc5b46658ae32fcd6a7d31d7",
+      "text": "Barbershops may lack technical capacity to adopt a new platform and prefer phone/email or spreadsheets",
+      "source": "validation_risk",
+      "mission_id": "f734a61bf6e44cb986ba6662ebaac83c",
+      "created_at": "2026-10-10T10:24:26.241066Z"
+    },
+    {
+      "learning_id": "9fdc98859fc447a0b921cb8b7ab6f258",
+      "text": "Revenue model is unclear; subscription or transaction fees may not justify adoption for small shops",
+      "source": "validation_risk",
+      "mission_id": "f734a61bf6e44cb986ba6662ebaac83c",
+      "created_at": "2026-10-10T10:24:26.275295Z"
+    },
+    {
+      "learning_id": "40a20f500a514948bb30ac174a0a4957",
+      "text": "Specific pain points or limitations faced by users are not described.",
+      "source": "validation_risk",
+      "mission_id": "f734a61bf6e44cb986ba6662ebaac83c",
+      "created_at": "2026-10-10T10:24:26.295122Z"
+    },
+    {
+      "learning_id": "1a5ad9ab25e84c7fb51e296fb3d6804b",
+      "text": "Detailed solution components, technologies, and protocols are missing.",
+      "source": "validation_risk",
+      "mission_id": "f734a61bf6e44cb986ba6662ebaac83c",
+      "created_at": "2026-10-10T10:24:26.312759Z"
+    },
+    {
+      "learning_id": "f59c8f0a0c7f427ab1a2f3a9df37b6eb",
+      "text": "Business model, revenue streams, and monetization strategy are undefined.",
+      "source": "validation_risk",
+      "mission_id": "f734a61bf6e44cb986ba6662ebaac83c",
+      "created_at": "2026-10-10T10:24:26.328922Z"
+    },
+    {
+      "learning_id": "e230b14a4f8449c4b741a94caa364294",
+      "text": "Feedback humano: rating=4 — Necessario incluir notificacao automatica via WhatsApp para lembrete de agendamento.",
+      "source": "human_feedback",
+      "mission_id": null,
+      "created_at": "2026-10-10T10:25:14.954546Z"
     }
   ],
   "tags": [],
   "created_at": "2026-10-09T23:32:24.599011Z",
-  "updated_at": "2026-10-09T23:42:00.325892Z"
+  "updated_at": "2026-10-10T10:25:14.954546Z"
 }

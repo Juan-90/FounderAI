@@ -1,0 +1,30 @@
+{
+  "provider": "mock",
+  "query": "Barbershop owners and customers face scheduling conflicts when multiple users attempt to book the same time slot simultaneously, leading to double bookings, revenue loss, and customer dissatisfaction. Additionally, enforcing cancellation policies consistently across the platform is challenging, causing potential disputes and administrative overhead. Barbershop owners, barbers, and customers who book appointments online",
+  "normalized_query": "barbershop owners and customers face scheduling conflicts when multiple users attempt to book the same time slot simultaneously, leading to double bookings, revenue loss, and customer dissatisfaction. additionally, enforcing cancellation policies consistently across the platform is challenging, causing potential disputes and administrative overhead. barbershop owners, barbers, and customers who book appointments online",
+  "results": [
+    {
+      "title": "Mock result 1 for 'Barbershop owners and customers face sch'",
+      "snippet": "Deterministic snippet 1 (digest prefix: bb4584c2).",
+      "url": "https://mock.example/bb4584c2/1",
+      "publisher": "mock-publisher",
+      "score": 1.0
+    },
+    {
+      "title": "Mock result 2 for 'Barbershop owners and customers face sch'",
+      "snippet": "Deterministic snippet 2 (digest prefix: bb4584c2).",
+      "url": "https://mock.example/bb4584c2/2",
+      "publisher": "mock-publisher",
+      "score": 0.9
+    },
+    {
+      "title": "Mock result 3 for 'Barbershop owners and customers face sch'",
+      "snippet": "Deterministic snippet 3 (digest prefix: bb4584c2).",
+      "url": "https://mock.example/bb4584c2/3",
+      "publisher": "mock-publisher",
+      "score": 0.8
+    }
+  ],
+  "stored_at": "2026-10-10T10:21:50.187248+00:00",
+  "ttl_seconds": 86400
+}
