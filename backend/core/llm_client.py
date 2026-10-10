@@ -24,6 +24,7 @@ import httpx
 from rich.console import Console
 
 from backend.core.config import ProviderName, Settings, settings
+from backend.utils.retry_policy import backoff_seconds
 
 console = Console(stderr=True)
 
@@ -391,7 +392,12 @@ class LLMClient:
             except httpx.HTTPStatusError as exc:
                 code = exc.response.status_code
                 if code in _RETRYABLE_STATUS and attempt < max_retries:
-                    delay = self._config.LLM_RETRY_BACKOFF_SECONDS * (2 ** attempt)
+                    # v5.5.3: backoff exponencial unificado (base maior p/ 429)
+                    delay = backoff_seconds(
+                        attempt + 1,
+                        status_code=code,
+                        base=self._config.LLM_RETRY_BACKOFF_SECONDS,
+                    )
                     console.print(
                         f"[yellow]⚠  {provider} HTTP {code} (transiente). "
                         f"Retry {attempt + 1}/{max_retries} em {delay:.1f}s...[/yellow]"

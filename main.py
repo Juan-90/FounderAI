@@ -458,6 +458,9 @@ async def main() -> None:
         _show_history(args.history_limit)
         sys.exit(0)
 
+    if getattr(args, "no_confirm", False):
+        _app_settings.COUNCIL_ASSUME_DEFAULTS = True   # v5.5.3
+
     # ── PROJECT (v5.3.0 + feedback v5.5.0) ──
     if args.mission == "project":
         action = args.build_intent or "list"

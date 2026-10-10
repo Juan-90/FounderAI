@@ -1,20 +1,18 @@
 """
-Agentes especializados do pipeline VALIDATE (v4.4.0 + normalização tolerante).
+Agentes especializados do pipeline VALIDATE (v5.5.3 — Contrarian resiliente).
 
-v4.4.0 hotfix 2: modelos de produção (Groq/local) podem OMITIR campos do schema.
-  • _apply_defaults(): preenche campos não-críticos ausentes (listas/textos) com
-    defaults seguros, mantendo o pipeline resiliente.
-  • Campos críticos (os cobertos pelos testes de contrato) permanecem obrigatórios.
-  • Prompts reforçados com "inclua TODAS as chaves, mesmo que vazias".
-
-v5.5.2: IdeaIntakeAgent torna-se TOLERANTE — clarified_fields/assumptions/gaps
-  recebem defaults seguros ({} / [] / []) via require_clarified_fields, eliminando
-  ValidateAgentError quando a LLM omite clarified_fields. Apenas "summary" segue crítico.
+v5.5.3: ContrarianRiskAgent NUNCA levanta ValidateAgentError por skeptic_score:
+  • ausente -> default 5;
+  • texto ("7/10", "score: 8") -> extrai primeiro número via regex;
+  • fora de [1,10] -> clamp.
+v5.5.2: IdeaIntakeAgent tolerante (clarified_fields default {}).
+v4.4.0 hotfix 2: _apply_defaults() preenche campos não-críticos ausentes.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from backend.build.agents import LLMBuildClient
@@ -37,9 +35,11 @@ _SYSTEM: str = (
     "Inclua TODAS as chaves solicitadas, mesmo que com listas/textos vazios."
 )
 
+_SCORE_RE = re.compile(r"\d+(?:\.\d+)?")
+_DEFAULT_SKEPTIC: int = 5
+
 
 def _to_dict(raw: Any) -> dict[str, Any]:
-    """Converte a resposta do LLM em dict, tolerando Markdown/JSON malformatado."""
     if isinstance(raw, dict):
         return raw
     if isinstance(raw, str):
@@ -56,13 +56,11 @@ def _to_dict(raw: Any) -> dict[str, Any]:
 
 
 async def _call_json(client: Any, user_prompt: str) -> dict[str, Any]:
-    """Chama o método de JSON com fallback quando disponível (await interno)."""
     method = getattr(client, "complete_json_with_fallback", client.complete_json)
     return await method(system_prompt=_SYSTEM, user_prompt=user_prompt)
 
 
 def _apply_defaults(data: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
-    """Preenche campos não-críticos ausentes com defaults seguros."""
     for key, value in defaults.items():
         data.setdefault(key, value)
     return data
@@ -74,6 +72,24 @@ def _require_keys(data: dict[str, Any], required: list[str], agent: str) -> None
         raise ValidateAgentError(
             f"{agent}: campos obrigatórios ausentes: {', '.join(missing)}"
         )
+
+
+def _coerce_skeptic_score(value: Any) -> int:
+    """v5.5.3: skeptic_score seguro — default 5, regex p/ texto, clamp [1,10]."""
+    if isinstance(value, bool):
+        return _DEFAULT_SKEPTIC
+    if isinstance(value, int):
+        score = value
+    elif isinstance(value, float):
+        score = int(round(value))
+    elif isinstance(value, str):
+        m = _SCORE_RE.search(value)
+        if not m:
+            return _DEFAULT_SKEPTIC
+        score = int(round(float(m.group())))
+    else:
+        return _DEFAULT_SKEPTIC
+    return max(1, min(10, score))
 
 
 class IdeaIntakeAgent:
@@ -97,7 +113,6 @@ class IdeaIntakeAgent:
         )
         data = _apply_defaults(_to_dict(await _call_json(self._client, user)), self._DEFAULTS)
         _require_keys(data, self._REQUIRED, "IdeaIntakeAgent")
-        # v5.5.2: clarified_fields SEMPRE presente (default {}), sem ValidateAgentError
         data["clarified_fields"] = require_clarified_fields(data)
         return data
 
@@ -191,11 +206,10 @@ class TechnicalFeasibilityAgent:
 
 
 class ContrarianRiskAgent:
-    """Estágio 5/7 — Cético estrito: riscos, falsos positivos, custos. (tolerante)"""
+    """Estágio 5/7 — Cético tolerante a skeptic_score (v5.5.3)."""
 
     _DEFAULTS = {"regulatory_risks": [], "false_positive_risks": [],
                  "hidden_costs": [], "reasons_to_kill": []}
-    _REQUIRED = ["skeptic_score"]
 
     def __init__(self, client: LLMBuildClient | None = None) -> None:
         self._client: LLMBuildClient = client if client is not None else LLMClient()
@@ -219,12 +233,8 @@ class ContrarianRiskAgent:
             "Inclua TODAS as chaves. Não suavize críticas."
         )
         data = _apply_defaults(_to_dict(await _call_json(self._client, user)), self._DEFAULTS)
-        _require_keys(data, self._REQUIRED, "ContrarianRiskAgent")
-        score = data.get("skeptic_score")
-        if not isinstance(score, int) or not (1 <= score <= 10):
-            raise ValidateAgentError(
-                "ContrarianRiskAgent: skeptic_score deve ser int em [1, 10]."
-            )
+        # v5.5.3: nunca ValidateAgentError por skeptic_score
+        data["skeptic_score"] = _coerce_skeptic_score(data.get("skeptic_score"))
         return data
 
 

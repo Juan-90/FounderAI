@@ -3,20 +3,18 @@ Council — Conselho Consultivo Artificial.
 Módulo C2: System Prompts carregados de arquivos externos versionados (v3).
 Módulo C1: Retry para respostas inconsistentes + fallback seguro.
 Módulo C3: Decisão final via compute_final_verdict (limiares v3.0).
-v3.5 / Fase 3 Bloco 2+: Observabilidade híbrida com retrocompatibilidade total:
-  • `call_ollama_json` NESTE módulo é um wrapper híbrido (LLMClient Cloud/Local
-    com fallback) que injeta metadados de observabilidade no dict do jurado;
-  • Testes legados que fazem patch de
-    `backend.agents.council.call_ollama_json` permanecem válidos (seam preservado);
-  • Seam `_get_llm_client` para testes de integração/E2E com MockTransport.
-v5.5.2: system prompt do jurado resolvido de forma defensiva
-  (`_juror_system_prompt`: dict -> load_prompt(name) -> fallback), eliminando
-  KeyError: 'system_prompt' quando _evaluate_juror recebe jurados crus (JURORS).
+v3.5 / Fase 3 Bloco 2+: Observabilidade híbrida retrocompatível
+  (call_ollama_json wrapper + seam _get_llm_client).
+v5.5.2: system prompt defensivo por jurado (_juror_system_prompt).
+v5.5.3: premissas padrão seguras p/ Architect/SecurityCoder em modo não
+  interativo (--no-confirm ou stdin não-TTY), evitando VETO por falta de
+  detalhe técnico (_assume_defaults + _ASSUMPTION_BLOCK).
 """
 
 from __future__ import annotations
 
 import json
+import sys
 from typing import List
 
 from pydantic import ValidationError
@@ -55,6 +53,24 @@ _FALLBACK_JUROR_SYSTEM: str = (
     "separe fato de inferência e responda APENAS com JSON válido."
 )
 
+# v5.5.3 — premissas padrão p/ jurados técnicos em modo não interativo
+_ASSUMPTION_BLOCK: str = (
+    "\n\nPREMISSAS PADRÃO (modo não interativo / --no-confirm): se faltarem "
+    "detalhes técnicos (stack, escala, integrações, ameaças específicas), "
+    "ADOTE premissas padrão seguras e conservadoras (ex.: stack web comum, "
+    "volume moderado, autenticação padrão, OWASP top-10) e liste-as brevemente "
+    "no reasoning. NÃO emita VETO apenas por falta de detalhe; reserve VETO "
+    "para riscos reais e concretos."
+)
+
+_TECHNICAL_JURORS = ("Architect", "SecurityCoder")
+
+
+def _assume_defaults() -> bool:
+    """True se --no-confirm (config) ou stdin não-TTY (não interativo)."""
+    return bool(settings.COUNCIL_ASSUME_DEFAULTS) or not sys.stdin.isatty()
+
+
 # ─────────────────────────────────────────
 # Definição dos Jurados (Módulo C2)
 # ─────────────────────────────────────────
@@ -67,7 +83,6 @@ JURORS: List[dict] = [
 
 
 def _resolve_jurors() -> List[dict]:
-    """Carrega system_prompts dos arquivos externos em runtime."""
     return [
         {"name": j["name"], "system_prompt": load_prompt(j["name"])}
         for j in JURORS
@@ -75,11 +90,7 @@ def _resolve_jurors() -> List[dict]:
 
 
 def _juror_system_prompt(juror: dict) -> str:
-    """System prompt defensivo (v5.5.2): dict -> load_prompt(name) -> fallback.
-
-    Nunca levanta KeyError, mesmo quando o jurado vem cru (só com 'name'),
-    como ocorre no main.py que itera JURORS diretamente.
-    """
+    """System prompt defensivo (v5.5.2): dict -> load_prompt(name) -> fallback."""
     existing = juror.get("system_prompt")
     if isinstance(existing, str) and existing.strip():
         return existing
@@ -97,10 +108,6 @@ def _juror_system_prompt(juror: dict) -> str:
 # ─────────────────────────────────────────
 
 def _get_llm_client() -> LLMClient:
-    """
-    Factory do cliente LLM — seam para testes de integração/E2E
-    (monkeypatch `backend.agents.council._get_llm_client`).
-    """
     return LLMClient()
 
 
@@ -115,20 +122,6 @@ async def call_ollama_json(
     *,
     role: str | None = None,
 ) -> dict:
-    """
-    Wrapper híbrido com o MESMO nome/sema do legado (Sprint 4).
-
-    Em produção: roteia via `LLMClient.complete_verbose` (Cloud → Local com
-    fallback automático) e injeta os metadados de observabilidade
-    (provider_used / model_used / fallback_triggered / original_provider)
-    no dict retornado — a fonte da verdade é o transporte, nunca o modelo.
-
-    Em testes: símbolos patcheados (`AsyncMock`) interceptam normalmente,
-    pois `_evaluate_juror` resolve este nome em tempo de chamada.
-
-    Raises:
-        LLMProviderError: falha de transporte ou JSON inválido (sem stack trace).
-    """
     client = _get_llm_client()
     result = await client.complete_verbose(
         system_prompt=system_prompt,
@@ -151,7 +144,6 @@ async def call_ollama_json(
             kind=LLMErrorKind.INVALID_JSON,
         )
 
-    # Observabilidade (sobrescreve qualquer chave vinda do modelo)
     parsed["provider_used"] = result.provider_used
     parsed["model_used"] = result.model_used
     parsed["fallback_triggered"] = result.fallback_triggered
@@ -176,7 +168,7 @@ def _correction_prompt(juror_name: str, raw: dict, error_msg: str) -> str:
 
 
 # ─────────────────────────────────────────
-# Avaliação individual com retry (Módulo C1) + observabilidade (Bloco 2)
+# Avaliação individual com retry (C1) + observabilidade (Bloco 2)
 # ─────────────────────────────────────────
 
 async def _evaluate_juror(
@@ -184,12 +176,6 @@ async def _evaluate_juror(
     mission: str,
     context_block: str = "",
 ) -> JurorResponse:
-    """
-    Executa a avaliação de um único jurado.
-    Retry em inconsistência → fallback seguro se retry falhar.
-    Os metadados de observabilidade chegam dentro do dict bruto
-    (injetados pelo wrapper `call_ollama_json` deste módulo).
-    """
     context_section = f"\n{context_block}" if context_block else ""
     system_prompt = _juror_system_prompt(juror)  # v5.5.2: nunca KeyError
 
@@ -202,9 +188,13 @@ async def _evaluate_juror(
         f"Seu juror_name deve ser exatamente: {juror['name']}"
     )
 
-    role = juror["name"]  # habilita override por papel (Architect/SecurityCoder)
+    # v5.5.3: premissas padrão p/ jurados técnicos em modo não interativo
+    if juror["name"] in _TECHNICAL_JURORS and _assume_defaults():
+        user_prompt += _ASSUMPTION_BLOCK
 
-    # ── Tentativa 1 ──────────────────────────────────────────────────────────
+    role = juror["name"]
+
+    # ── Tentativa 1 ──
     raw: dict = {}
     first_error: str = ""
 
@@ -228,7 +218,7 @@ async def _evaluate_juror(
     except (ValidationError, Exception) as e:
         first_error = str(e)
 
-    # ── Retry ─────────────────────────────────────────────────────────────────
+    # ── Retry ─
     console.print(
         f"[bold yellow][WARNING][/bold yellow] Resposta inconsistente para "
         f"[bold]{juror['name']}[/bold]. Executando retry..."
@@ -236,7 +226,7 @@ async def _evaluate_juror(
 
     try:
         raw_retry: dict = await call_ollama_json(
-            system_prompt=system_prompt,  # v5.5.2: resolvido, não indexado
+            system_prompt=system_prompt,
             user_prompt=_correction_prompt(juror["name"], raw, first_error),
             model=settings.council_model,
             role=role,
@@ -247,7 +237,6 @@ async def _evaluate_juror(
         return JurorResponse(**raw_retry)
 
     except Exception as retry_err:
-        # ── Fallback seguro (Módulo C1) ───────────────────────────────────────
         console.print(
             f"[bold red][FALLBACK][/bold red] Retry falhou para "
             f"[bold]{juror['name']}[/bold]: {retry_err}\n"
@@ -273,10 +262,6 @@ async def run_council(
     mission: str,
     context_files: list[str] | None = None,
 ) -> CouncilDecision:
-    """
-    Executa o Conselho Consultivo de forma SEQUENCIAL.
-    Decisão final via compute_final_verdict (limiares v3.0).
-    """
     context_block: str = ""
     if context_files:
         from backend.tools.file_tools import build_context_block
@@ -291,7 +276,6 @@ async def run_council(
         responses.append(response)
         print(f"     Score: {response.score:.1f} | Veredicto: {response.verdict.value}")
 
-    # ── Decisão final via função pura (Módulo C3) ─────────────────────────────
     result = compute_final_verdict(responses)
 
     return CouncilDecision(

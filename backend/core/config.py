@@ -21,7 +21,8 @@ class Settings(BaseSettings):
     PRIMARY_PROVIDER: ProviderName = "groq"
     FALLBACK_PROVIDER: ProviderName = "local"
     LLM_TIMEOUT_SECONDS: float = 60.0
-    LLM_LOCAL_TIMEOUT_SECONDS: float = 180.0
+    COUNCIL_ASSUME_DEFAULTS: bool = False
+    LLM_LOCAL_TIMEOUT_SECONDS: int = 360
     LLM_HTTP_RETRIES: int = 2
     LLM_RETRY_BACKOFF_SECONDS: float = 1.5
     ARCHITECT_PROVIDER: ProviderName | None = None

@@ -250,11 +250,25 @@ def test_contrarian_retorna_dict_completo() -> None:
     assert isinstance(out["reasons_to_kill"], list)
 
 
-def test_contrarian_score_fora_do_intervalo_raise() -> None:
-    bad = dict(_CONTRARIAN_OK, skeptic_score=15)
+def test_contrarian_score_fora_do_intervalo_clamp() -> None:
+    """v5.5.3: skeptic_score fora de [1,10] é clampado, não raise."""
+    hi = dict(_CONTRARIAN_OK, skeptic_score=15)
+    lo = dict(_CONTRARIAN_OK, skeptic_score=0)
+    agent_hi = ContrarianRiskAgent(client=FakeValidateClient(hi))
+    agent_lo = ContrarianRiskAgent(client=FakeValidateClient(lo))
+    out_hi = asyncio.run(agent_hi.analyze({}, {}, {}, {}))
+    out_lo = asyncio.run(agent_lo.analyze({}, {}, {}, {}))
+    assert out_hi["skeptic_score"] == 10
+    assert out_lo["skeptic_score"] == 1
+
+
+def test_contrarian_score_ausente_default() -> None:
+    """v5.5.3: skeptic_score ausente -> default 5."""
+    bad = dict(_CONTRARIAN_OK)
+    bad.pop("skeptic_score", None)
     agent = ContrarianRiskAgent(client=FakeValidateClient(bad))
-    with pytest.raises(ValidateAgentError, match="skeptic_score"):
-        _run(agent.analyze(_INTAKE_OK, _PROBLEM_OK, _COMPETITORS_OK, _TECH_OK))
+    out = asyncio.run(agent.analyze({}, {}, {}, {}))
+    assert out["skeptic_score"] == 5
 
 
 # ─────────────────────────────────────────────────────────────
