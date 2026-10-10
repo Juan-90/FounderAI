@@ -1,8 +1,0 @@
-{
-  "should_build": false,
-  "needs_human_confirmation": false,
-  "reason": "Veredito 'INVESTIGATE' não autoriza prosseguir para o BUILD.",
-  "source_verdict": "INVESTIGATE",
-  "confidence": 0.0,
-  "conditions": []
-}
