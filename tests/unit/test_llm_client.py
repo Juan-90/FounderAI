@@ -37,9 +37,13 @@ def _make_settings(
     securitycoder: ProviderName | None = None,
     productstrategist: ProviderName | None = None,
     groq_api_key: str = "groq-test-key",
+    openrouter_api_key: str = "or-test-key",
+    gemini_api_key: str = "",
+    openai_api_key: str = "oa-test-key",
     local_base_url: str = "http://localhost:11434/v1",
     http_retries: int = 2,
     retry_backoff: float = 1.5,
+    llm_provider_order: str = "",  # v5.5.5: força cadeia legada [PRIMARY, FALLBACK]
 ) -> Settings:
     return Settings(
         PRIMARY_PROVIDER=primary,
@@ -51,9 +55,11 @@ def _make_settings(
         SECURITYCODER_PROVIDER=securitycoder,
         PRODUCTSTRATEGIST_PROVIDER=productstrategist,
         GROQ_API_KEY=groq_api_key,
-        OPENROUTER_API_KEY="or-test-key",
-        OPENAI_API_KEY="oa-test-key",
+        OPENROUTER_API_KEY=openrouter_api_key,
+        GEMINI_API_KEY=gemini_api_key,
+        OPENAI_API_KEY=openai_api_key,
         ollama_base_url=local_base_url,
+        LLM_PROVIDER_ORDER=llm_provider_order,
     )
 
 

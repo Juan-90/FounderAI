@@ -1,14 +1,16 @@
 """
-Configurações centrais do FounderAI (v5.0.0 GA).
+Configurações centrais do FounderAI (v5.5.5).
 
-Cobre v4.0 (Sandbox) → v4.7 (DISCOVER) → v5.0 (Golden Missions), com
-checagem de ambiente (environment_warnings) e validação de provedores.
+Cobre v4.0 (Sandbox) → v4.7 (DISCOVER) → v5.0 (Golden Missions) →
+v5.5.4 (multi-gateway) → v5.5.5 (ambiente tolerante), com checagem de
+ambiente (environment_warnings) e validação de provedores.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal, Optional
 
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ProviderName = Literal[
@@ -33,23 +35,37 @@ class Settings(BaseSettings):
     LLM_LOCAL_TIMEOUT_SECONDS: int = 360
     LLM_HTTP_RETRIES: int = 2
     LLM_RETRY_BACKOFF_SECONDS: float = 1.5
-    ARCHITECT_PROVIDER: ProviderName | None = None
-    SECURITYCODER_PROVIDER: ProviderName | None = None
-    PRODUCTSTRATEGIST_PROVIDER: ProviderName | None = None
+
+    # ── Overrides por papel (v5.5.5: tolerantes a string vazia) ──
+    ARCHITECT_PROVIDER: Optional[ProviderName] = None
+    SECURITYCODER_PROVIDER: Optional[ProviderName] = None
+    PRODUCTSTRATEGIST_PROVIDER: Optional[ProviderName] = None
+
+    @field_validator(
+        "ARCHITECT_PROVIDER",
+        "SECURITYCODER_PROVIDER",
+        "PRODUCTSTRATEGIST_PROVIDER",
+        mode="before",
+    )
+    @classmethod
+    def _empty_override_to_none(cls, v: Any) -> Any:
+        """v5.5.5: string vazia no .env -> None (override desativado)."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     # ── Fase 2 — Endpoints e credenciais Cloud ──
     GROQ_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
     # ── v5.5.4 — Provedores multi-gateway ──
-    OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-3.8-flash"
     LLM_PROVIDER_ORDER: str = ""
 
     # ── Modelos customizáveis (v4.0) ──
@@ -120,7 +136,7 @@ class Settings(BaseSettings):
     GOLDEN_ENABLED: bool = True
     GOLDEN_ARTIFACTS_DIR: str = "artifacts/golden"
 
-        # ── v5.2.0 — Evidence Layer ──
+    # ── v5.2.0 — Evidence Layer ──
     EVIDENCE_ENABLED: bool = True
     EVIDENCE_PROVIDER: str = "mock"                 # "mock" | "http"
     EVIDENCE_HTTP_ENDPOINT: str = ""
@@ -130,15 +146,14 @@ class Settings(BaseSettings):
     EVIDENCE_TIMEOUT_SECONDS: float = 10.0
     EVIDENCE_FAIL_OPEN: bool = True
 
-        # Cache de evidências (v5.2.1)
+    # Cache de evidências (v5.2.1)
     EVIDENCE_CACHE_ENABLED: bool = True
     EVIDENCE_CACHE_TTL_SECONDS: int = 86400       # 24 horas
     EVIDENCE_CACHE_BYPASS: bool = False
 
-        # Provedores reais de busca (v5.2.1)
+    # Provedores reais de busca (v5.2.1)
     TAVILY_API_KEY: str = ""
     SERPER_API_KEY: str = ""
-
 
     # ── v5.3.0 — Project Memory ──
     PROJECT_MEMORY_ENABLED: bool = True
@@ -146,15 +161,14 @@ class Settings(BaseSettings):
     PROJECT_MEMORY_CONTEXT_MAX_CHARS: int = 8000
     PROJECT_MEMORY_DIR: str = "artifacts/projects"
 
-        # ── v5.4.0 — IMPROVE Mode ──
+    # ── v5.4.0 — IMPROVE Mode ──
     IMPROVE_MODE_ENABLED: bool = True
     IMPROVE_MAX_FILES_TOUCHED: int = 8
     IMPROVE_MAX_RETRIES: int = 2
 
-        # ── v5.5.0 — OBSERVE (feedback) ──
+    # ── v5.5.0 — OBSERVE (feedback) ──
     OBSERVE_FEEDBACK_ENABLED: bool = True
     OBSERVE_FEEDBACK_MAX_NOTE_CHARS: int = 2000
-    
 
     # ── Legado Fase 1 — Ollama ──
     ollama_base_url: str = "http://localhost:11434/v1"
@@ -163,7 +177,7 @@ class Settings(BaseSettings):
     model_reasoning: str = "gemma2:2b"
     council_model: str = "gemma2:2b"
 
-    # ── PostgreSQL ─
+    # ── PostgreSQL ──
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "fundador_ia"
@@ -175,9 +189,9 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     qdrant_collection: str = "missions"
 
-    # ── App ──
+    # ── App ─
     app_name: str = "Fundador IA"
-    app_version: str = "5.0.0"
+    app_version: str = "5.5.5"
     debug: bool = False
 
     model_config = SettingsConfigDict(
@@ -198,6 +212,9 @@ class Settings(BaseSettings):
             "groq": self.GROQ_BASE_URL,
             "openrouter": self.OPENROUTER_BASE_URL,
             "openai": self.OPENAI_BASE_URL,
+            "anthropic": "https://api.anthropic.com/v1",
+            "gemini": "https://generativelanguage.googleapis.com/v1beta",
+            "mock": "",
             "local": self.ollama_base_url,
         }
         return urls[provider]
@@ -207,6 +224,9 @@ class Settings(BaseSettings):
             "groq": self.GROQ_API_KEY,
             "openrouter": self.OPENROUTER_API_KEY,
             "openai": self.OPENAI_API_KEY,
+            "anthropic": self.ANTHROPIC_API_KEY,
+            "gemini": self.GEMINI_API_KEY,
+            "mock": "",
             "local": "",
         }
         return keys[provider]
@@ -216,6 +236,9 @@ class Settings(BaseSettings):
             "groq": self.GROQ_MODEL,
             "openrouter": self.OPENROUTER_MODEL,
             "openai": self.OPENAI_MODEL,
+            "anthropic": "claude-3-5-haiku-latest",
+            "gemini": self.GEMINI_MODEL,
+            "mock": "mock",
             "local": self.council_model,
         }
         return models[provider]
@@ -266,10 +289,6 @@ class Settings(BaseSettings):
                     )
 
         # ── v5.5.4 — providers multi-gateway: só reclamar quando em uso ────
-        # Constrói o conjunto de providers ativos (primary + fallback + roles +
-        # LLM_PROVIDER_ORDER) e só emite warning de chave ausente se o provider
-        # estiver em uso. Evita falso positivo quando primary=local e o usuário
-        # não configurou openrouter/gemini.
         active: set[str] = set()
         if primary:
             active.add(primary)
