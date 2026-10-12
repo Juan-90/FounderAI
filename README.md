@@ -63,6 +63,20 @@ cp .env.example .env     # edite chaves de API e provedores
 
 ---
 
+
+## ⚙️ Configuração de Ambiente (v5.5.5)
+
+O FounderAI carrega toda a configuração via `.env` na **raiz** do repositório
+(mesmo nível de `main.py` e `requirements.txt`), usando `pydantic-settings`.
+
+### Setup rápido
+
+```bash
+cp .env.example .env        # PowerShell: Copy-Item .env.example .env
+# edite o .env e preencha suas chaves de API
+
+
+
 ## 🌐 Servidor de API (v5.1+) & Frontend
 
 ```bash
