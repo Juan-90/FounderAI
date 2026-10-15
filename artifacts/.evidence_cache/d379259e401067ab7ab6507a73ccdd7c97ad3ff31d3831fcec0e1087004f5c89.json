@@ -8,9 +8,11 @@
       "snippet": "70% das barbearias ainda usam agenda de papel",
       "url": "https://sebrae.com.br/barbearias",
       "publisher": "Sebrae",
-      "score": 1.0
+      "score": 1.0,
+      "is_simulated": true
     }
   ],
-  "stored_at": "2026-10-12T20:24:11.942486+00:00",
-  "ttl_seconds": 86400
+  "stored_at": "2026-10-15T22:58:09.402623+00:00",
+  "ttl_seconds": 86400,
+  "is_simulated": true
 }

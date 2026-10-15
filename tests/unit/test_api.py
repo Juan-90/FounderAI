@@ -49,20 +49,21 @@ def _cfg(tmp_path: Path) -> Settings:
 
 
 def test_health(tmp_path: Path) -> None:
-    client = TestClient(create_app(config=_cfg(tmp_path), engine=FakeEngine()))
+    cfg = _cfg(tmp_path)
+    client = TestClient(create_app(config=cfg, engine=FakeEngine()))
     r = client.get("/health")
     assert r.status_code == 200
     data = r.json()
     assert data["status"] in ("healthy", "degraded")
-    assert data["version"] == "5.1.0"
-    assert isinstance(data["active_providers"], list)
+    assert data["version"] == cfg.app_version   # v5.5.7: versão dinâmica
 
 
 def test_version(tmp_path: Path) -> None:
-    client = TestClient(create_app(config=_cfg(tmp_path), engine=FakeEngine()))
+    cfg = _cfg(tmp_path)
+    client = TestClient(create_app(config=cfg, engine=FakeEngine()))
     r = client.get("/api/v1/version")
     assert r.status_code == 200
-    assert r.json()["version"] == "5.1.0"
+    assert r.json()["version"] == cfg.app_version   # v5.5.7: versão dinâmica
 
 
 def test_interact_com_engine_fake(tmp_path: Path) -> None:

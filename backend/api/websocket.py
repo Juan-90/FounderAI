@@ -1,5 +1,5 @@
 """
-Camada WebSocket da API FounderAI (v5.1.0).
+Camada WebSocket da API FounderAI (v5.5.7).
 
 ConnectionManager gerencia conexões ativas e transmite eventos do MissionEngine
 em tempo real. Formato dos eventos:

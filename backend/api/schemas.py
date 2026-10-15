@@ -1,5 +1,5 @@
 """
-Modelo unificado de interação da API (v5.1.0).
+Modelo unificado de interação da API (v5.5.7).
 """
 
 from __future__ import annotations
@@ -9,7 +9,9 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from backend.domain.feedback import (  # re-export p/ contratos da API (v5.5.0)
+from backend.core.config import settings
+
+from backend.domain.feedback import (  # re-export p/ contratos da API (v5.5.7)
     ProjectFeedbackRequest,
     ProjectFeedbackResult,
 )
@@ -54,6 +56,6 @@ class HealthResponse(BaseModel):
     """Health check da plataforma."""
 
     status: HealthStatusLiteral
-    version: str = "5.1.0"
+    version: str = settings.app_version
     environment: str
     active_providers: list[str] = Field(default_factory=list)

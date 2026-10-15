@@ -1,4 +1,4 @@
 
 """
-Camada de interação REST/WebSocket do FounderAI (v5.1.0).
+Camada de interação REST/WebSocket do FounderAI (v5.5.7).
 """

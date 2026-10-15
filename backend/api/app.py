@@ -1,5 +1,5 @@
 """
-Aplicação FastAPI do FounderAI (v5.1.0 — REST + WebSocket).
+Aplicação FastAPI do FounderAI (v5.5.7 — REST + WebSocket).
 
 create_app() permite injetar config/engine (testável via TestClient).
 """

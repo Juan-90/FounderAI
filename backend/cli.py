@@ -2,7 +2,9 @@
 Helpers compartilhados de CLI (v5.0) + gerenciamento de projetos (v5.3.0).
 
 v5.0: friendly_error (sem stack trace) + summary_panel (resumo Rich).
-v5.3: subcomando `project` (list/show/timeline/artifacts).
+v5.3: subcomando `project` (list/show/timeline/artifacts/feedback).
+v5.5.7 (P0 #1): run_improve_mode usa injeção automática de LLMPatchGenerator
+  via ImprovePipeline (patcher=None), fechando o ciclo real do IMPROVE.
 """
 
 from __future__ import annotations
@@ -177,7 +179,7 @@ def cmd_feedback(
     except Exception as exc:
         console.print(f"[red]Erro ao registrar feedback:[/red] {friendly_error(exc)}")
         return 1
-    
+
     if not result.accepted:
         console.print(f"[red]Feedback não registrado:[/red] {result.summary}")
         return 1
@@ -191,10 +193,11 @@ def cmd_feedback(
     ))
     return 0
 
+
 def main(args: list[str]) -> int:
     """Entry point do subcomando `project`."""
     if not args:
-        console.print("[red]Uso: python main.py project <list|show|timeline|artifacts> [id][/red]")
+        console.print("[red]Uso: python main.py project <list|show|timeline|artifacts|feedback> [id][/red]")
         return 1
     cmd = args[0]
     if cmd == "list":
@@ -219,7 +222,7 @@ def main(args: list[str]) -> int:
 
 
 # ─────────────────────────────────────────
-# v5.4 — modo IMPROVE
+# v5.4 — modo IMPROVE (P0 #1 v5.5.7)
 # ─────────────────────────────────────────
 
 def _render_improve(result: Any) -> None:
@@ -259,7 +262,12 @@ async def run_improve_mode(
     no_confirm: bool = False,
     config: Optional[Settings] = None,
 ) -> int:
-    from backend.core.improve.patcher import ImprovePatcher, ImproveQualityRunner
+    """Executa IMPROVE via CLI.
+
+    v5.5.7 P0 #1: NÃO instancia ImprovePatcher() explicitamente — delega
+    ao ImprovePipeline a injeção do LLMPatchGenerator (que usa o LLMClient
+    ativo, produzindo patches reais via LLM cloud/local).
+    """
     from backend.core.improve.pipeline import ImprovePipeline
     from backend.domain.improve import ImproveRequest
 
@@ -269,11 +277,8 @@ async def run_improve_mode(
         return 1
 
     store = _get_store(cfg)
-    pipe = ImprovePipeline(
-        store=store, config=cfg,
-        patcher=ImprovePatcher(),
-        quality_runner=ImproveQualityRunner(),
-    )
+    # v5.5.7: patcher=None -> pipeline injeta LLMPatchGenerator
+    pipe = ImprovePipeline(store=store, config=cfg)
     request = ImproveRequest(
         project_id=project_id, goal=goal,
         require_human_confirmation=not no_confirm,
@@ -297,19 +302,6 @@ async def run_improve_mode(
             except Exception as exc:
                 console.print(f"[red]Erro ao aplicar:[/red] {friendly_error(exc)}")
                 return 1
-            _render_improve(result)
-        else:
-            console.print("[dim]Aplicação cancelada; plano mantido como rascunho.[/dim]")
-            return 0
-    return 0 if result.success else 1
-    _render_improve(result)
-
-    if result.waiting_human:
-        answer = console.input("\n[bold yellow]Aplicar patch? [y/N]:[/bold yellow] ").strip().lower()
-        if answer in ("y", "yes"):
-            approved = request.model_copy(update={
-                "require_human_confirmation": False, "auto_apply": True})
-            result = await pipe.execute(approved)
             _render_improve(result)
         else:
             console.print("[dim]Aplicação cancelada; plano mantido como rascunho.[/dim]")

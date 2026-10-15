@@ -8,9 +8,11 @@
       "snippet": "agenda inteligente para barbearias em alta",
       "url": "https://trend.com/agenda",
       "publisher": "TrendCo",
-      "score": 1.0
+      "score": 1.0,
+      "is_simulated": true
     }
   ],
-  "stored_at": "2026-10-12T20:24:10.619112+00:00",
-  "ttl_seconds": 86400
+  "stored_at": "2026-10-15T22:58:07.113445+00:00",
+  "ttl_seconds": 86400,
+  "is_simulated": true
 }

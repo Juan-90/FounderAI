@@ -1,13 +1,17 @@
 """
-Provedores de busca plugáveis (v5.2.1 + Real Search Providers).
+Provedores de busca plugáveis (v5.2.1 + v5.5.7 Real Search Providers + Proveniência).
 
 • SearchProvider: protocolo estrutural (duck-typed, sem herança forçada).
-• MockSearchProvider: determinístico (testes/fallback seguro).
+• MockSearchProvider: determinístico (testes/fallback seguro). Itens retornados
+  têm is_simulated=True.
 • HttpSearchProvider: REST genérico configurável.
 • TavilySearchProvider: Tavily AI Search API (https://api.tavily.com/search).
 • SerperSearchProvider: Serper.dev Google Search API (https://google.serper.dev/search).
 • get_search_provider(name): fábrica com fallback para MockSearchProvider
-  quando a API key correspondente não está configurada.
+  quando a API key correspondente não está configurada. O provider retornado
+  expõe is_mock_fallback=True quando foi instanciado como fallback — permite
+  que o EvidenceService use uma chave de cache distinta e evite poluir o
+  cache de providers reais com resultados simulados (P0 #2 v5.5.7).
 
 Regra de não-invenção: provedores NUNCA inventam URLs ou fontes fictícias.
 O que vier do provedor é o que vai para o grafo.
@@ -17,7 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, runtime_checkable
 
 import httpx
@@ -33,13 +37,19 @@ class SearchProviderError(Exception):
 
 @dataclass(frozen=True)
 class SearchResultItem:
-    """Um resultado cru retornado por um provedor de busca."""
+    """Um resultado cru retornado por um provedor de busca.
+
+    v5.5.7 (P0 #2): campo `is_simulated` indica se o item foi gerado por
+    MockSearchProvider (fallback) ou veio de um provider real (Tavily/Serper).
+    Usado pelo EvidenceService para isolar proveniência no cache e grafo.
+    """
 
     title: str
     snippet: str
     url: Optional[str] = None
     publisher: Optional[str] = None
     score: float = 1.0
+    is_simulated: bool = False
 
     def stable_source_id(self) -> str:
         """ID estável derivado do conteúdo (para deduplicação no grafo)."""
@@ -49,17 +59,27 @@ class SearchResultItem:
 
 @runtime_checkable
 class SearchProvider(Protocol):
-    """Contrato de qualquer provedor de busca (duck-typed)."""
+    """Contrato de qualquer provedor de busca (duck-typed).
+
+    Opcionalmente, provedores podem expor o atributo `is_mock_fallback: bool`
+    para sinalizar que são um fallback mockado (ex: Tavily sem API key).
+    """
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResultItem]: ...
 
 
 # ─────────────────────────────────────────────────────────────
-# MockSearchProvider (fallback seguro)
+# MockSearchProvider (fallback seguro — marca is_simulated=True)
 # ─────────────────────────────────────────────────────────────
 
 class MockSearchProvider:
-    """Provedor determinístico: aceita fixtures ou gera resultados por hash da query."""
+    """Provedor determinístico: aceita fixtures ou gera resultados por hash da query.
+
+    v5.5.7 P0 #2: todos os itens retornados têm is_simulated=True, e a instância
+    expõe is_mock_fallback=True para o service poder distinguir na chave de cache.
+    """
+
+    is_mock_fallback: bool = True
 
     def __init__(self, fixtures: Optional[dict[str, list[SearchResultItem]]] = None) -> None:
         self._fixtures: dict[str, list[SearchResultItem]] = dict(fixtures or {})
@@ -69,7 +89,10 @@ class MockSearchProvider:
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResultItem]:
         if query in self._fixtures:
-            return list(self._fixtures[query])[:max_results]
+            # v5.5.7: força is_simulated=True mesmo em fixtures (proveniência correta)
+            return [
+                _ensure_simulated(it) for it in list(self._fixtures[query])[:max_results]
+            ]
         digest = hashlib.sha1(query.encode("utf-8")).hexdigest()
         generated: list[SearchResultItem] = []
         for i in range(min(max_results, 3)):
@@ -79,8 +102,23 @@ class MockSearchProvider:
                 url=f"https://mock.example/{digest[:8]}/{i+1}",
                 publisher="mock-publisher",
                 score=1.0 - (i * 0.1),
+                is_simulated=True,  # v5.5.7 P0 #2
             ))
         return generated
+
+
+def _ensure_simulated(item: SearchResultItem) -> SearchResultItem:
+    """Retorna cópia do item com is_simulated=True (imutável por ser frozen)."""
+    if item.is_simulated:
+        return item
+    return SearchResultItem(
+        title=item.title,
+        snippet=item.snippet,
+        url=item.url,
+        publisher=item.publisher,
+        score=item.score,
+        is_simulated=True,
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -89,6 +127,8 @@ class MockSearchProvider:
 
 class HttpSearchProvider:
     """Provedor REST configurável via endpoint + API key."""
+
+    is_mock_fallback: bool = False
 
     def __init__(
         self,
@@ -146,6 +186,7 @@ class HttpSearchProvider:
             url=str(url) if url else None,
             publisher=str(publisher) if publisher else None,
             score=score,
+            is_simulated=False,
         )
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResultItem]:
@@ -197,6 +238,7 @@ class TavilySearchProvider:
 
     ENDPOINT = "https://api.tavily.com/search"
     DEFAULT_PUBLISHER = "tavily"
+    is_mock_fallback: bool = False
 
     def __init__(
         self,
@@ -210,7 +252,7 @@ class TavilySearchProvider:
         self._api_key = api_key
         self._timeout = timeout
         self._include_answer = include_answer
-        self._transport = transport  # permite injeção de MockTransport em testes
+        self._transport = transport
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResultItem]:
         body: dict[str, Any] = {
@@ -272,6 +314,7 @@ class TavilySearchProvider:
                 url=str(url) if url else None,
                 publisher=self.DEFAULT_PUBLISHER,
                 score=max(0.0, min(1.0, score)),
+                is_simulated=False,
             ))
         return items
 
@@ -288,6 +331,7 @@ class SerperSearchProvider:
 
     ENDPOINT = "https://google.serper.dev/search"
     DEFAULT_PUBLISHER = "serper"
+    is_mock_fallback: bool = False
 
     def __init__(
         self,
@@ -362,13 +406,14 @@ class SerperSearchProvider:
                 snippet=str(snippet or ""),
                 url=str(url) if url else None,
                 publisher=self.DEFAULT_PUBLISHER,
-                score=1.0,  # Serper não fornece score; usa posição como proxy
+                score=1.0,
+                is_simulated=False,
             ))
         return items
 
 
 # ─────────────────────────────────────────────────────────────
-# Fábrica
+# Fábrica (v5.5.7: mock_fallback exposto no provider retornado)
 # ─────────────────────────────────────────────────────────────
 
 _VALID_NAMES = frozenset({"mock", "http", "tavily", "serper"})
@@ -381,7 +426,11 @@ def get_search_provider(
     """Retorna o provedor pelo nome, com fallback seguro para Mock.
 
     Se a API key correspondente estiver ausente/vazia, registra aviso e
-    retorna MockSearchProvider (fail-safe). Names inválidos lançam ValueError.
+    retorna MockSearchProvider (fail-safe). O provider retornado expõe
+    is_mock_fallback=True quando foi instanciado como fallback — permite
+    que o EvidenceService use uma chave de cache distinta (mock_<name>) e
+    evite poluir o cache de providers reais (P0 #2 v5.5.7).
+    Names inválidos lançam ValueError.
     """
     cfg = config if config is not None else settings
     n = (name or "").strip().lower()

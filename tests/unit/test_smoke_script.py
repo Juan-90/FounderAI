@@ -67,7 +67,7 @@ def test_smoke_report_passos_detalhados(tmp_path: Path) -> None:
     assert "Cria projeto de teste" in names
     assert "POST feedback humano" in names
     assert "GET timeline (OBSERVED)" in names
-    assert "IMPROVE dry-run" in names
+    assert "IMPROVE (asserções P0 #3)" in names
     for s in report.steps:
         assert s.detail, f"passo '{s.name}' sem detalhe"
 

@@ -1,5 +1,5 @@
 """
-ImprovePipeline — orquestração completa do modo IMPROVE (v5.5.x).
+ImprovePipeline — orquestração completa do modo IMPROVE (v5.5.7).
 
 Fluxo:
   1. Carrega ProjectMemory (DiskProjectMemoryStore).
@@ -16,6 +16,10 @@ Persistência de memória:
     (code_bundle/relatório/tdd) + MemoryLearning por item.
   • Patch vazio: NADA é gravado (status NO_CHANGES).
   • Falha/escalado: evento BUILD_FAILED/ESCALATED + learning do erro.
+
+v5.5.7: quando patcher=None, injeta ImprovePatcher alimentado por
+  LLMPatchGenerator (que usa o LLMClient ativo — Groq/OpenRouter/Gemini/Local),
+  fechando o ciclo real de valor do IMPROVE (P0 #1).
 """
 
 from __future__ import annotations
@@ -60,7 +64,13 @@ class ImprovePipeline:
         )
         self._diagnoser = diagnoser or ImproveDiagnoser()
         self._planner = planner or ImprovePlanner()
-        self._patcher = patcher or ImprovePatcher()
+
+        # v5.5.7: injeta LLMPatchGenerator por padrão (usa LLMClient real)
+        if patcher is None:
+            from backend.core.improve.llm_patch_generator import LLMPatchGenerator
+            patcher = ImprovePatcher(generator=LLMPatchGenerator())
+        self._patcher = patcher
+
         self._quality = quality_runner or ImproveQualityRunner()
         self._initial_bundle = initial_bundle
 

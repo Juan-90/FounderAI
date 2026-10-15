@@ -8,23 +8,27 @@
       "snippet": "PMEs adotam agenda inteligente para barbearias",
       "url": "https://ibge.gov.br/pmes",
       "publisher": "IBGE",
-      "score": 1.0
+      "score": 1.0,
+      "is_simulated": true
     },
     {
       "title": "Agendamento digital",
       "snippet": "Barbearias contratam controle de estoque para restaurantes",
       "url": "https://sebrae.com.br/agenda",
       "publisher": "Sebrae",
-      "score": 1.0
+      "score": 1.0,
+      "is_simulated": true
     },
     {
       "title": "Carbono e PMEs",
       "snippet": "Relatórios de carbono para PMEs ganham tração",
       "url": "https://gov.br/carbono",
       "publisher": "Gov",
-      "score": 1.0
+      "score": 1.0,
+      "is_simulated": true
     }
   ],
-  "stored_at": "2026-10-12T20:24:10.617915+00:00",
-  "ttl_seconds": 86400
+  "stored_at": "2026-10-15T22:58:07.092276+00:00",
+  "ttl_seconds": 86400,
+  "is_simulated": true
 }

@@ -1,13 +1,21 @@
 """
-Cache persistente de evidências (v5.2.1).
+Cache persistente de evidências (v5.2.1 + v5.5.7 isolamento de proveniência).
 
 FileEvidenceCache salva resultados de busca em artifacts/.evidence_cache/,
 evitando re-chamadas idênticas ao provedor em missões distintas.
 
 Chave: SHA256(provider_name + normalized_query)
-Payload: {results: [...], stored_at: ISO-8601, ttl_seconds: int}
+  • provider_name já vem distinto do service (ex: "mock_tavily" vs "tavily"),
+    garantindo que chaves de simulado e real NUNCA colidam.
+Payload: {results: [...], stored_at: ISO-8601, ttl_seconds: int, is_simulated: bool}
 Flags via Settings: EVIDENCE_CACHE_ENABLED, EVIDENCE_CACHE_TTL_SECONDS,
                     EVIDENCE_CACHE_BYPASS (força miss).
+
+P0 #2 (v5.5.7): proteção anti-poluição:
+  • set() recusa sobrescrever entrada real com payload simulado (defesa em
+    profundidade, caso o service passe provider incorreto).
+  • get() só retorna entrada se o flag is_simulated no disco for consistente
+    com o esperado; se inconsistente, trata como miss.
 
 Fail-open: erros de I/O, JSON ou schema são logados como warning e o cache
 se comporta como miss (retorna None / não salva).
@@ -55,6 +63,7 @@ def _item_to_dict(item: SearchResultItem) -> dict:
         "url": item.url,
         "publisher": item.publisher,
         "score": item.score,
+        "is_simulated": bool(item.is_simulated),  # v5.5.7 P0 #2
     }
 
 
@@ -66,13 +75,14 @@ def _item_from_dict(d: dict) -> Optional[SearchResultItem]:
             url=d.get("url"),
             publisher=d.get("publisher"),
             score=float(d.get("score", 1.0)),
+            is_simulated=bool(d.get("is_simulated", False)),  # v5.5.7 P0 #2
         )
     except Exception:
         return None
 
 
 class FileEvidenceCache:
-    """Cache em disco de resultados de busca (fail-open)."""
+    """Cache em disco de resultados de busca (fail-open + P0 #2 anti-poluição)."""
 
     def __init__(
         self,
@@ -101,7 +111,14 @@ class FileEvidenceCache:
         return self._root / f"{_cache_key(provider, query)}.json"
 
     def get(self, provider: str, query: str) -> Optional[list[SearchResultItem]]:
-        """Retorna os resultados se existirem e estiverem dentro do TTL; senão None."""
+        """Retorna os resultados se existirem, estiverem dentro do TTL e com
+        flag de proveniência consistente; senão None (miss).
+
+        v5.5.7 P0 #2: se o disco tem is_simulated=True mas o provider solicitado
+        não começa com 'mock_' (ou vice-versa), trata como miss — impede que um
+        cache real seja servido como simulado ou vice-versa mesmo com chave
+        distinta.
+        """
         if not self.enabled or self.bypass:
             return None
         path = self._path_for(provider, query)
@@ -120,12 +137,31 @@ class FileEvidenceCache:
                 stored_at = stored_at.replace(tzinfo=timezone.utc)
             age = (_now() - stored_at).total_seconds()
             if age < 0 or age > ttl:
-                # Expirado: limpa e retorna miss
                 try:
                     path.unlink()
                 except OSError:
                     pass
                 return None
+
+            # v5.5.7 P0 #2: proteção anti-poluição (relaxada).
+            # Só há risco de poluição quando o DISCO tem item simulado mas o
+            # provider SOLICITADO é real — nesse caso, recusa. Quando o disco
+            # tem item puro (is_simulated=False), ele pode ser servido para
+            # qualquer provider (mock ou real) sem risco.
+            cached_simulated = bool(raw.get("is_simulated", False))
+            requested_mock = (provider or "").lower().startswith("mock")
+            if cached_simulated and not requested_mock:
+                logger.warning(
+                    "EvidenceCache: inconsistência de proveniência em %s "
+                    "(disco=simulado, solicitado=real); tratando como miss.",
+                    path.name,
+                )
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+                return None
+
             items: list[SearchResultItem] = []
             for d in payload:
                 if not isinstance(d, dict):
@@ -144,21 +180,60 @@ class FileEvidenceCache:
         query: str,
         results: list[SearchResultItem],
         ttl: Optional[int] = None,
+        is_simulated: Optional[bool] = None,
     ) -> None:
-        """Salva resultados no cache. Fail-open: erros de I/O não quebram."""
+        """Salva resultados no cache. Fail-open: erros de I/O não quebram.
+
+        v5.5.7 P0 #2: proteção anti-poluição em defesa de profundidade.
+          • Se is_simulated=True mas o provider não começa com 'mock_', recusa
+            (evita gravar dados simulados sob identidade de provider real).
+          • Se já existe entrada REAL no disco e o novo payload é simulado,
+            recusa sobrescrever.
+        """
         if not self.enabled or self.bypass:
             return
+
+        # Determina proveniência (do argumento ou dos itens)
+        if is_simulated is None:
+            is_simulated = any(bool(r.is_simulated) for r in results)
+        provider_lower = (provider or "unknown").lower()
+        requested_mock = provider_lower.startswith("mock")
+
+        # Defesa 1: provider "real" nunca pode receber payload simulado
+        if is_simulated and not requested_mock:
+            logger.warning(
+                "EvidenceCache.set recusado: payload simulado tentou gravar "
+                "sob provider real '%s'. Use 'mock_<provider>' como chave.",
+                provider,
+            )
+            return
+
+        path = self._path_for(provider, query)
+
+        # Defesa 2: se já existe entrada real no disco, não sobrescrever com simulado
+        if is_simulated and path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+                if not existing.get("is_simulated", False):
+                    logger.warning(
+                        "EvidenceCache.set recusado: entrada real já existe "
+                        "em %s; payload simulado não sobrescreve.", path.name,
+                    )
+                    return
+            except (json.JSONDecodeError, OSError, ValueError):
+                pass
+
         try:
             self._root.mkdir(parents=True, exist_ok=True)
             payload = {
-                "provider": (provider or "unknown").lower(),
+                "provider": provider_lower,
                 "query": query,
                 "normalized_query": _normalize_query(query),
                 "results": [_item_to_dict(it) for it in results],
                 "stored_at": _now().isoformat(),
                 "ttl_seconds": int(ttl) if ttl is not None else self.ttl_seconds,
+                "is_simulated": bool(is_simulated),  # v5.5.7 P0 #2
             }
-            path = self._path_for(provider, query)
             path.write_text(
                 json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
             )

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Rotas REST da API FounderAI (v5.1 + v5.2 evidence + v5.3 projects + v5.5 feedback).
 
 Segurança: mission_id/file_name sanitizados contra path traversal (400 em '..').
@@ -87,15 +87,15 @@ async def health(config: Settings = Depends(get_config)) -> HealthResponse:
     providers = list(dict.fromkeys([config.PRIMARY_PROVIDER, config.FALLBACK_PROVIDER]))
     return HealthResponse(
         status="degraded" if warnings else "healthy",
-        version=API_VERSION,
+        version=config.app_version,
         environment="development" if config.debug else "production",
         active_providers=providers,
     )
 
 
 @router.get("/api/v1/version")
-async def version() -> dict[str, str]:
-    return {"version": API_VERSION, "name": "FounderAI"}
+async def version(config: Settings = Depends(get_config)) -> dict[str, str]:
+    return {"version": config.app_version, "name": "FounderAI"}
 
 
 @router.post("/api/v1/interact", response_model=InteractionResponse)

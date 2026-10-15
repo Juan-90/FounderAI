@@ -191,7 +191,7 @@ class Settings(BaseSettings):
 
     # ── App ─
     app_name: str = "Fundador IA"
-    app_version: str = "5.5.5"
+    app_version: str = "5.5.7"
     debug: bool = False
 
     model_config = SettingsConfigDict(

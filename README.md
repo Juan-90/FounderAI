@@ -6,29 +6,34 @@ evidências externas**, **expõe tudo por API reativa** e **audita a si próprio
 transformando a intenção de um fundador em software testado, com trilha de
 auditoria completa e decisão humana no comando.
 
-> **v5.2.1** — Evidence Hardening (Real Providers, Caching, Dedup & Observability)
-> · Núcleo GA selado em v5.0.0 · Interaction Layer em v5.1.0 · Evidence Graph em v5.2.0.
+> **v5.5.7** — P0 Fixes & Integrity Hardening
+> · Núcleo GA selado em v5.0.0 · Interaction Layer em v5.1.0 · Evidence Graph em v5.2.0
+> · Project Memory em v5.3.0 · IMPROVE em v5.4.0 · OBSERVE em v5.5.0 · Multi-gateway em v5.5.4.
 
 ---
 
 ## 🧠 O Ciclo Cognitivo & Arquitetura
 
-```
-   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐
-   │ DISCOVER │──▶│ VALIDATE │──▶│  BUILD   │──▶│ SELF-AUDIT │──┐
-   │ (mapear) │   │ (merece?)│   │(construir)│   │ (auditar)  │  │
-   └──────────   └──────────┘   └──────────┘   └────────────┘  │
-        ▲                                                       │
-        └────────────────────  feedback  ───────────────────────┘
-                            │
-        ┌───────────────────────────────────────────┐
-        │ Interaction Layer (v5.1)                  │
-        │ FastAPI REST + WebSockets + Streamlit     │
-        ├───────────────────────────────────────────┤
-        │ Evidence Layer (v5.2)                     │
-        │ Tavily/Serper + Cache + Dedup + Métricas  │
-        └───────────────────────────────────────────┘
-```
+
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐
+│ DISCOVER │──▶│ VALIDATE │──▶│ BUILD │──▶│ SELF-AUDIT │──┐
+│ (mapear) │ │ (merece?)│ │(construir)│ │ (auditar) │ │
+└────────── └──────────┘ └──────────┘ └────────────┘ │
+▲ │
+└──────────────────── feedback ───────────────────────┘
+│
+┌───────────────────────────────────────────┐
+│ Interaction Layer (v5.1) │
+│ FastAPI REST + WebSockets + Streamlit │
+├───────────────────────────────────────────┤
+│ Evidence Layer (v5.2) │
+│ Tavily/Serper + Cache + Dedup + Métricas │
+├───────────────────────────────────────────┤
+│ Project Memory (v5.3) + IMPROVE (v5.4) │
+│ OBSERVE (v5.5) + Multi-gateway (v5.5.4) │
+└───────────────────────────────────────────┘
+
+
 
 - **🧭 DISCOVER** — mapeia oportunidades a partir de um tema (ranking por pesos
   explícitos + filtro anti-clichê) e entrega as melhores ao VALIDATE.
@@ -43,6 +48,13 @@ auditoria completa e decisão humana no comando.
 - **⚡ INTERACTION LAYER (v5.1)** — `MissionEngine` expõe o núcleo via REST + WebSocket.
 - **🔍 EVIDENCE LAYER (v5.2)** — busca externa (Tavily/Serper), cache 24h, dedup e
   métricas; cada claim rastreável até uma fonte real.
+- **🧠 PROJECT MEMORY (v5.3)** — eventos, decisões, aprendizados e artefatos
+  versionados persistidos entre missões.
+- **🔧 IMPROVE (v5.4 + v5.5.7)** — diagnostica a memória, planeja melhorias e
+  aplica patches reais via LLM (Groq/OpenRouter/Gemini/Local) com Quality Gate.
+- **👁 OBSERVE (v5.5)** — feedback humano integrado à memória; alimenta o IMPROVE.
+- **☁️ MULTI-GATEWAY (v5.5.4)** — OpenRouter + Gemini + Groq + Local com fallback
+  cloud-first em 429 (pula rate-limit ANTES de cair no local lento).
 
 ---
 
@@ -51,7 +63,8 @@ auditoria completa e decisão humana no comando.
 ```bash
 git clone <repo> && cd FounderAI
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
-pip install -e .[dev]                                # ou pip install -r requirements.txt
+pip install -r requirements.txt                       # runtime
+pip install -r requirements-dev.txt                   # +dev/test
 
 # Sandbox (necessária p/ BUILD/SELF-AUDIT):
 docker build -t founderai-sandbox-python:v1 \
@@ -59,27 +72,57 @@ docker build -t founderai-sandbox-python:v1 \
 
 # Configuração:
 cp .env.example .env     # edite chaves de API e provedores
-```
-
----
 
 
-## ⚙️ Configuração de Ambiente (v5.5.5)
 
-O FounderAI carrega toda a configuração via `.env` na **raiz** do repositório
-(mesmo nível de `main.py` e `requirements.txt`), usando `pydantic-settings`.
+⚙️ Configuração de Ambiente (v5.5.7)
+O FounderAI carrega toda a configuração via .env na raiz do repositório
+(mesmo nível de main.py e requirements.txt), usando pydantic-settings.
 
-### Setup rápido
 
-```bash
+Setup rápido
+
 cp .env.example .env        # PowerShell: Copy-Item .env.example .env
-# edite o .env e preencha suas chaves de API
+# edite o .env e preencha suas chaves de API (Groq/OpenRouter/Gemini)
+
+
+Provedores suportados
+
+Provider
+Endpoint
+Modelo default
+Variável
+OpenRouter
+https://openrouter.ai/api/v1
+openai/gpt-4o-mini
+OPENROUTER_API_KEY
+Gemini
+generativelanguage.googleapis.com/v1beta
+gemini-3.8-flash
+GEMINI_API_KEY
+Groq
+https://api.groq.com/openai/v1
+openai/gpt-oss-20b
+GROQ_API_KEY
+Local (Ollama)
+http://localhost:11434/v1
+gemma2:2b
+—
+
+
+Multi-gateway (v5.5.4+)
+
+# .env
+LLM_PROVIDER_ORDER=openrouter,gemini,groq,local
+
+Em caso de 429 (rate-limit), o sistema pula para o próximo provedor de nuvem
+ANTES de cair no local lento.
 
 
 
-## 🌐 Servidor de API (v5.1+) & Frontend
+🌐 Servidor de API (v5.1+) & Frontend
 
-```bash
+
 # API backend
 uvicorn backend.api.app:app --reload --port 8000
 #   REST:      http://localhost:8000/api/v1/interact
@@ -88,13 +131,12 @@ uvicorn backend.api.app:app --reload --port 8000
 
 # Frontend Streamlit harmonizado
 streamlit run frontend/app.py
-```
 
----
 
-## 🖥 Uso via CLI
 
-```bash
+🖥 Uso via CLI
+
+
 # DISCOVER
 python main.py discover "Oportunidades de software para barbearias no Brasil" --max 6
 
@@ -108,63 +150,67 @@ python main.py build "Jogo 2D de nave vs asteroides" --type GAME
 # VALIDATE_AND_BUILD
 python main.py validate-and-build "Validar EcoTrack-IA e construir MVP" --auto-build
 
+# IMPROVE (v5.5.7 — patches reais via LLM)
+python main.py improve --project <id> --goal "Adicionar notificações"
+python main.py improve --project <id> --goal "Refinar testes" --auto-apply
+
+# OBSERVE — feedback humano
+python main.py project feedback <id> --rating 5 --note "UX ótima"
+
 # SELF-AUDIT & Golden Missions
 python main.py self-audit --max-per-mode 2
 python main.py golden-missions
 
-# Evidências (v5.2)
-python main.py validate "Sua ideia" --evidence-provider tavily
-python main.py discover "Tema" --no-evidence        # só opinião do modelo
-```
+# Limpeza (v5.5.4)
+python main.py clean --all
 
----
+# Smoke de release (v5.5.7)
+python main.py smoke
 
-## 🔍 Evidências Externas (v5.2)
 
-### Provedores reais
 
-```bash
+🔍 Evidências Externas (v5.2)
+
+
+Provedores reais
+
 # .env
 TAVILY_API_KEY="tvly-..."      # https://tavily.com
 SERPER_API_KEY="..."           # https://serper.dev
 EVIDENCE_PROVIDER=tavily       # mock | http | tavily | serper
-```
 
-Sem key configurada, o sistema **cai graciosamente para o MockSearchProvider**
+
+Sem key configurada, o sistema cai graciosamente para o MockSearchProvider
 (com aviso) — nunca quebra a missão.
 
-### Cache & Dedup
 
-- Cache de 24h em `artifacts/.evidence_cache/` (`EVIDENCE_CACHE_TTL_SECONDS`);
-  `EVIDENCE_CACHE_BYPASS=true` força busca fresca.
-- Dedup de fontes por URL canônica, de evidências por hash e de claims por texto.
+Cache & Dedup
+Cache de 24h em artifacts/.evidence_cache/ (EVIDENCE_CACHE_TTL_SECONDS);
+EVIDENCE_CACHE_BYPASS=true força busca fresca.
+Dedup de fontes por URL canônica, de evidências por hash e de claims por texto.
 
-### Observabilidade
 
-Cada missão com evidência grava `evidence_graph.json` com métricas:
-`provider_used`, `cache_hits`, `cache_misses`, `deduped_sources_count`,
-`deduped_evidence_count`, `deduped_claims_count` — expostas em
-`GET /api/v1/missions/{id}` no campo `evidence_summary`.
+Observabilidade
+Cada missão com evidência grava evidence_graph.json com métricas:
+provider_used, cache_hits, cache_misses, deduped_sources_count,
+deduped_evidence_count, deduped_claims_count — expostas em
+GET /api/v1/missions/{id} no campo evidence_summary.
 
----
 
-## 🧠 Memória de Projeto (v5.3.0)
 
-Cada projeto acumula **eventos, decisões, aprendizados e versões de artefatos**
+🧠 Memória de Projeto (v5.3.0)
+
+Cada projeto acumula eventos, decisões, aprendizados e versões de artefatos
 entre missões. Um BUILD posterior herda automaticamente as decisões e os riscos
 descobertos num VALIDATE anterior (injetados no contexto dos agentes).
 
-### Vincular missões a um projeto
 
-```bash
+
+Vincular missões a um projeto
+
 python main.py validate "Validar EcoTrack-IA" --project <project_id>
 python main.py build "Construir MVP EcoTrack" --project <project_id>
 python main.py validate-and-build "Ideia" --project <project_id>
-
-python main.py project list                 # todos os projetos
-python main.py project show <id>            # goal + decisões + aprendizados
-python main.py project timeline <id>        # linha do tempo de eventos
-python main.py project artifacts <id>       # versões de artefatos arquivadas
 
 python main.py project list                 # todos os projetos
 python main.py project show <id>            # goal + decisões + aprendizados
@@ -176,84 +222,119 @@ GET /api/v1/projects/{id}                 # resumo completo
 GET /api/v1/projects/{id}/timeline        # eventos
 GET /api/v1/projects/{id}/artifacts       # versões
 
-## 🗂 Artefatos & Governança
 
-- **Artefatos:** `artifacts/<modo>/<mission_id>/` (+ subpasta `evidence/` quando aplicável).
-- **Governança (ADRs):** arquivo único **`docs/DECISIONS`** (v1.0 → v5.2.1, ADR-004…ADR-020).
-- **Log de deliberações (verbatim):** `docs/decisions_history.json`.
-- **Release notes:** `docs/RELEASE_NOTES_v5.0.md`.
 
----
+🗂 Artefatos & Governança
 
-## 🧪 Testes
 
-```bash
-pytest -q                     # suíte completa (400+ testes, sem LLM/Docker no CI)
+Artefatos: artifacts/<modo>/<mission_id>/ (+ subpasta evidence/ quando aplicável).
+Governança (ADRs): arquivo único docs/DECISIONS (v1.0 → v5.5.7).
+Log de deliberações (verbatim): docs/decisions_history.json.
+Release notes: docs/RELEASE_NOTES_v5.0.md.
+
+
+
+🧪 Testes
+
+
+pytest -q                     # suíte completa (500+ testes, sem LLM/Docker no CI)
 pytest -q --run-real-llm      # inclui testes com LLM real
 pytest -q --run-golden        # inclui a bateria Golden Missions real
-```
-
----
-
-## 🔧 Modo IMPROVE (v5.4.0)
-
-Fecha o loop de refinamento: **diagnostica** a memória do projeto, **planeja**
-melhorias, **aplica patches** com limite estrito de arquivos e **re-valida** em
-sandbox (static gate + TDD). Falhas passadas viram correções; correções viram
-aprendizados.
 
 
+
+🔧 Modo IMPROVE (v5.4.0 + v5.5.7)
+
+
+Fecha o loop de refinamento: diagnostica a memória do projeto, planeja
+melhorias, aplica patches reais via LLM (Groq/OpenRouter/Gemini/Local) com
+limite estrito de arquivos e re-valida em sandbox (static gate + TDD).
+Falhas passadas viram correções; correções viram aprendizados.
 
 Saída: tabela Rich com diagnóstico, plano de ações e status
-(`WAITING_HUMAN` / `SUCCESS` / `ESCALATED`); em `WAITING_HUMAN` pede `[y/N]`.
+(WAITING_HUMAN / SUCCESS / ESCALATED); em WAITING_HUMAN pede [y/N].
 
-Via API: `POST /api/v1/interact` com `mode:"improve"` (+`project_id`) ou atalho
-`POST /api/v1/projects/{id}/improve`.
+Via API: POST /api/v1/interact com mode:"improve" (+project_id) ou atalho
+POST /api/v1/projects/{id}/improve.
 
-Variáveis: `IMPROVE_MODE_ENABLED`, `IMPROVE_MAX_FILES_TOUCHED` (limite estrito
-de arquivos por melhoria), `IMPROVE_MAX_RETRIES` (retries do TDD antes de
-escalar). Ver **ADR-022**.
-
-## ⚠️ Estado da Baseline v5.5.0 & Limitações Reais
-
-**Baseline consolidada (selada em v5.5.0):** v5.0 GA (núcleo + Golden Missions)
-· v5.1 Interaction Layer (REST+WS) · v5.2 Evidence Graph + providers reais +
-cache/dedup · v5.3 Project Memory · v5.4 IMPROVE Mode · v5.5 OBSERVE mínimo +
-smoke de release. **478 testes** passando; smoke 6/6.
-
-**Limitações reais (transparência):**
-- **Generator LLM de patches não plugado:** o `ImprovePatcher` opera via
-  generators injetáveis (Protocol); sem generator, o patch é no-op. Patches
-  reais por provider LLM chegam na v5.6.
-- **OBSERVE mínimo:** só feedback humano explícito (CLI/REST); sem telemetria
-  automática de uso.
-- **Memória apenas em disco:** `artifacts/projects/<id>/memory.json` (atômico);
-  backends sqlite/redis adiados.
-- **Sem UI web** de timeline/melhorias (Streamlit cobre missões, não memória).
-- **Smoke in-process:** não sobe servidor/Docker reais (propósito: checagem
-  rápida de release).
-- **Relevância lexical:** Jaccard em evidence; embeddings/RAG adiados.
+Variáveis: IMPROVE_MODE_ENABLED, IMPROVE_MAX_FILES_TOUCHED (limite estrito
+de arquivos por melhoria), IMPROVE_MAX_RETRIES (retries do TDD antes de
+escalar). Ver ADR-022.
 
 
----
 
-## 👁 Feedback Humano — OBSERVE (v5.5.0)
+.
+👁 Feedback Humano — OBSERVE (v5.5.0)
+
 
 Registre a observação do fundador diretamente na memória do projeto; ela vira
-aprendizado (`human_feedback`) + evento `OBSERVED` e **alimenta o IMPROVE**
+aprendizado (human_feedback) + evento OBSERVED e alimenta o IMPROVE
 (diagnoser a cita primeiro; planner gera item de correção).
 
-```bash
 python main.py project feedback <project_id> --rating 4 --note "UX ótima, mas lenta" --tags ux,perf
 python main.py project timeline <project_id>     # evento OBSERVED formatado
 
-## 🗺 Roadmap
 
-- **v5.5.0 (atual — GA)** — OBSERVE mínimo + smoke de release + baseline v5.x selada.
-- **v5.6.0** — Generator LLM de patches plugável + auto-refinamento agendado +
-  UI web de timeline/melhorias + backend de memória plugável.
-- **v7.0.0+** — Continuous Project Memory & orquestração multi-agente (Colibri).
+
+⚠️ Limitações Reais (transparência)
+
+
+OBSERVE mínimo: só feedback humano explícito (CLI/REST); sem telemetria
+automática de uso.
+Memória apenas em disco: artifacts/projects/<id>/memory.json (atômico);
+backends sqlite/redis adiados.
+Sem UI web de timeline/melhorias (Streamlit cobre missões, não memória).
+Smoke in-process: não sobe servidor/Docker reais (propósito: checagem
+rápida de release).
+Relevância lexical: Jaccard em evidence; embeddings/RAG adiados.
+
+
+
+🗺 Roadmap
+
+
+v5.5.7 (atual) — P0 Fixes & Integrity Hardening: generator LLM real
+plugado no IMPROVE, asserções rígidas no smoke, isolamento de proveniência
+no cache de evidências, versionamento uniforme.
+v5.6.0 — Auto-refinamento agendado + UI web de timeline/melhorias +
+backend de memória plugável (sqlite/redis).
+v7.0.0+ — Continuous Project Memory & orquestração multi-agente (Colibri).
+
+
+
+FounderAI · AI Project Operating System · v5.5.7
+
 
 ---
 
-*FounderAI · AI Project Operating System · v5.2.1*
+## 📄 5 — `requirements.txt` (**NOVO — COMPLETO** na raiz)
+
+```text
+# ═══════════════════════════════════════════════════════════
+# FounderAI v5.5.7 — Dependências de runtime
+# ═══════════════════════════════════════════════════════════
+
+# Core
+pydantic>=2.6,<3
+pydantic-settings>=2.2,<3
+python-dotenv>=1.0.1
+
+# Async / HTTP
+httpx>=0.27,<1
+aiofiles>=23.2
+anyio>=4.3
+
+# CLI / UI
+rich>=13.7,<14
+
+# API
+fastapi>=0.110,<1
+uvicorn[standard]>=0.29,<1
+websockets>=12.0
+
+# DB / Vetorial (opcionais — usados se habilitados no .env)
+asyncpg>=0.29
+qdrant-client>=1.7
+
+# Sandbox Docker (opcional)
+docker>=7.0

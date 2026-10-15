@@ -1,4 +1,4 @@
-"""
+﻿"""
 MissionEngine — orquestrador/dispatcher de alto nível (v5.1.0).
 
 Recebe uma InteractionRequest e dispara o pipeline/runner do target_mode,
@@ -24,7 +24,7 @@ from backend.domain.enums import MissionStatus
 EventCallback = Callable[[dict[str, Any]], None]
 Handler = Callable[[InteractionRequest], Awaitable[InteractionResponse]]
 
-API_VERSION = "5.1.0"
+API_VERSION = settings.app_version
 
 
 def _now() -> datetime:

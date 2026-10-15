@@ -1,9 +1,18 @@
 """
-EvidenceService — coleta, cache, dedup, métricas e montagem do EvidenceGraph (v5.2.1).
+EvidenceService — coleta, cache, dedup, métricas e montagem do EvidenceGraph
+(v5.2.1 + v5.5.7 isolamento de proveniência).
 
 Fluxo de search(): 1) normaliza query -> 2) consulta cache -> 3) se miss, chama
 provider -> 4) salva cache. Métricas capturadas: provider_used, cache_hits,
 cache_misses, deduped_sources_count, deduped_evidence_count, deduped_claims_count.
+
+P0 #2 v5.5.7: quando o provider retornado pela fábrica é um MockSearchProvider
+de fallback (ex: Tavily sem API key), o service:
+  • usa um nome efetivo distinto ("mock_tavily", "mock_serper") como chave de
+    cache, impedindo poluição do cache do provider real;
+  • reporta provider_used com o nome efetivo (ex: "mock_tavily");
+  • emite warning documentando o fallback;
+  • os itens já vêm marcados com is_simulated=True pelos providers.
 
 Regras rígidas: nunca inventa URL/fonte; FAIL_OPEN; descarta item vazio.
 """
@@ -77,27 +86,52 @@ class EvidenceService:
         provider_name: Optional[str] = None,
     ) -> None:
         self._config: Settings = config if config is not None else settings
-        self._provider_name = (
+        requested_name = (
             provider_name or self._config.EVIDENCE_PROVIDER or "mock"
         ).lower()
+
         # Factory com fallback seguro (Mock) quando falta key/endpoint
-        self._provider: SearchProvider = (
-            provider or get_search_provider(self._provider_name, config=self._config)
-        )
+        if provider is None:
+            self._provider: SearchProvider = get_search_provider(
+                requested_name, config=self._config
+            )
+        else:
+            self._provider = provider
+
+        # v5.5.7 P0 #2: nome efetivo para cache/métricas
+        # Se o provider retornado for um mock de fallback, prefixamos com "mock_"
+        # para garantir chave de cache distinta do provider real.
+        is_mock_fallback = bool(getattr(self._provider, "is_mock_fallback", False))
+        if is_mock_fallback and requested_name != "mock":
+            self._effective_provider_name = f"mock_{requested_name}"
+            self.warnings: list[str] = [
+                f"EvidenceService: '{requested_name}' solicitado mas API key ausente; "
+                f"usando MockSearchProvider sob identidade '{self._effective_provider_name}' "
+                "(resultados marcados is_simulated=True)."
+            ]
+        else:
+            self._effective_provider_name = requested_name
+            self.warnings = []
+
         self._cache = cache if cache is not None else FileEvidenceCache(config=self._config)
-        self.warnings: list[str] = []
         self.metrics: dict[str, Any] = {
-            "provider_used": self._provider_name,
+            "provider_used": self._effective_provider_name,
             "cache_hits": 0,
             "cache_misses": 0,
             "deduped_sources_count": 0,
             "deduped_evidence_count": 0,
             "deduped_claims_count": 0,
+            "is_simulated": is_mock_fallback,  # v5.5.7 P0 #2: expõe na métrica
         }
 
     @property
     def enabled(self) -> bool:
         return self._config.EVIDENCE_ENABLED
+
+    @property
+    def effective_provider(self) -> str:
+        """Nome efetivo do provider (com prefixo 'mock_' quando em fallback)."""
+        return self._effective_provider_name
 
     # ── Plan ──
     def plan_queries(self, mode: str, payload: dict[str, Any]) -> list[SearchQuery]:
@@ -136,7 +170,7 @@ class EvidenceService:
             for q in queries[:cap]
         ]
 
-    # ── Search (cache -> provider -> cache) ──
+    # ── Search (cache -> provider -> cache) — v5.5.7 usa effective_provider ──
     def search(self, queries: list[SearchQuery]) -> list[SearchResultItem]:
         if not self.enabled:
             return []
@@ -144,13 +178,12 @@ class EvidenceService:
         collected: list[SearchResultItem] = []
         cap = max(1, self._config.EVIDENCE_MAX_QUERIES_PER_MISSION)
         for sq in queries[:cap]:
-            # 1+2) normaliza (dentro do cache) + consulta cache
-            cached = self._cache.get(self._provider_name, sq.query)
+            # v5.5.7 P0 #2: usa o nome efetivo (mock_<x> quando em fallback)
+            cached = self._cache.get(self._effective_provider_name, sq.query)
             if cached is not None:
                 self.metrics["cache_hits"] += 1
                 collected.extend(cached[: sq.max_results])
                 continue
-            # 3) miss -> provider
             self.metrics["cache_misses"] += 1
             try:
                 results = self._provider.search(sq.query, max_results=sq.max_results)
@@ -168,8 +201,13 @@ class EvidenceService:
                 if not fail_open:
                     raise
                 continue
-            # 4) salva cache (fail-open interno)
-            self._cache.set(self._provider_name, sq.query, results)
+            # v5.5.7 P0 #2: salva sob o nome efetivo + flag de proveniência
+            self._cache.set(
+                self._effective_provider_name,
+                sq.query,
+                results,
+                is_simulated=bool(getattr(self._provider, "is_mock_fallback", False)),
+            )
             collected.extend(results)
         return collected
 
